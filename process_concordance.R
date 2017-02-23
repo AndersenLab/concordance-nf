@@ -8,9 +8,14 @@ stack_list <- function(x) {
   stack(x)
 }
 
+coverage_20 <- (readr::read_tsv("SM_coverage.tsv") %>%
+                  dplyr::filter(coverage > 20))$strain
+
+
 WI_strain_info <- readr::read_tsv("https://docs.google.com/spreadsheets/d/1V6YHzblaDph01sFDI8YK_fP0H7sVebHQTXypGdiQIjI/pub?output=tsv") %>%
   dplyr::select(strain, isotype) %>%
-  dplyr::filter(!is.na(isotype))
+  dplyr::filter(!is.na(isotype)) %>%
+  dplyr::filter(strain %in% coverage_20)
 
 # Get number of Sites in VCF
 
@@ -19,9 +24,10 @@ nsites = as.numeric(nsites)
 
 
 gtcheck <- readr::read_tsv("gtcheck.tsv") %>%
+  dplyr::filter((i %in% coverage_20) & (j %in% coverage_20)) %>%
   dplyr::mutate(concordance = (nsites - discordance) / nsites) %>%
-  dplyr::mutate(isotype = concordance > 0.9993)
-
+  dplyr::mutate(isotype = concordance > 0.9993) 
+  
 #
 # Handle single strains
 #
@@ -61,10 +67,8 @@ isotype_groups <- stack_list(unique(lapply(strain_list, function(x) {
   dplyr::distinct(data, .keep_all = T) %>%
   tidyr::unnest()
 
-SM_coverage <- readr::read_tsv("SM_coverage.tsv")
-
 isotype_groups <- dplyr::left_join(isotype_groups, WI_strain_info) %>%
-  dplyr::left_join(SM_coverage) %>%
+  dplyr::left_join(readr::read_tsv("SM_coverage.tsv")) %>%
   dplyr::mutate(group = as.integer(group)) %>%
   dplyr::group_by(group) %>%
   dplyr::mutate(unique_isotypes_per_group = length(unique(purrr::discard(isotype, is.na )))) %>%

@@ -28,6 +28,8 @@ process generate_sets {
 
     module 'R/3.3.1'
 
+    executor 'local'
+
     publishDir "/projects/b1059/workflows/concordance-nf", mode: "copy"
 
     input:
@@ -35,7 +37,7 @@ process generate_sets {
 
     output:
     file 'strain_set.json' into strain_json
-    file 'isotype_set.json' into isotype_json
+    //file 'isotype_set.json' into isotype_json
 
     '''
     #!/usr/bin/env Rscript --vanilla
