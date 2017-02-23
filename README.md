@@ -84,6 +84,9 @@ compression_threads = 4
 ```
 
 __Output directories__
+
+The `analysis_dir` will output a structured directory of results that are detailed below. The `SM_alignments_dir` will output bams for each strain.
+
 ```
 analysis_dir = "/projects/b1059/analysis/WI-concordance" # For output of results.
 SM_alignments_dir = "/projects/b1059/data/alignments/WI/SM" # For sample level alignments.
@@ -118,4 +121,83 @@ process {
 
 ### Results
 
-The pipeline results w
+The pipeline results are output in the following structure.
+
+```
+├── strain_set.json # A list of strains used in the analysis (json format).
+├── concordance
+│   ├── concordance.png # Histogram of concordance, colored by isotype.
+│   ├── concordance.svg
+│   ├── filtered.stats.snp.txt # Statistics on filtered snp set used to examine concordance. 
+│   ├── gtcheck.tsv # output of bcftools gtcheck 
+│   ├── isotype_groups.tsv # Generated isotype groupings.
+│   ├── problem_SM.tsv # Problematic groupings, if any.
+│   ├── xconcordance.png # Zoomed in view of concordance.
+│   └── xconcordance.svg
+├── duplicates
+│   └── bam_duplicates.tsv # Summary of duplicate reads (determined by picard).
+├── fq
+│   ├── fq_bam_idxstats.tsv
+│   ├── fq_bam_stats.tsv
+│   ├── fq_coverage.full.tsv
+│   └── fq_coverage.tsv
+├── phylo
+│   ├── genome.png # Genome phylogeny
+│   ├── genome.svg
+│   ├── genome.tree # Newick format of tree
+│   ├── I.png # Chromosome I phylogeny
+│   ├── I.svg
+│   ├── I.tree
+│   ├── ...
+│   ├── MtDNA.png
+│   ├── MtDNA.svg
+│   ├── MtDNA.tree
+├── sitelist
+│   ├── sitelist.tsv # List of sites used in genotyping.
+│   ├── sitelist.tsv.gz # Compressed and indexed (with .tbi) list of sites.
+│   └── sitelist.tsv.gz.tbi
+├── SM
+│   ├── SM_bam_idxstats.tsv
+│   ├── SM_bam_stats.tsv
+│   ├── SM_coverage.full.tsv
+│   └── SM_coverage.tsv
+└── vcf
+    ├── concordance.gtcheck.tsv
+    ├── ED3046,ED3049.strain_comparison.tsv
+    ├── filtered.stats.txt
+    ├── gt.txt
+    ├── merged.filtered.snp.vcf.gz
+    ├── merged.filtered.snp.vcf.gz.csi
+    ├── merged.filtered.stats
+    ├── merged.filtered.vcf.gz
+    ├── merged.filtered.vcf.gz.csi
+    ├── MY23,BRC20231.strain_comparison.tsv
+    ├── NIC256,NIC263.strain_comparison.tsv
+    ├── NIC272,NIC273.strain_comparison.tsv
+    ├── QX1211,QX1215.strain_comparison.tsv
+    ├── QX1211,QX1216.strain_comparison.tsv
+    ├── QX1215,QX1216.strain_comparison.tsv
+    ├── spectrum.txt
+    ├── strain_comparison.tsv
+    └── union_vcfs.txt
+```
+
+### Details on files above
+
+Below are details regarding some of the generated files above:
+
+#### concordance/
+
+__isotype_groups.tsv__
+
+|   group | strain   | isotype   |   coverage |   unique_isotypes_per_group | strain_conflicts   |
+|--------:|:---------|:----------|-----------:|----------------------------:|:-------------------|
+|       1 | AB1      | AB1       |    69.4687 |                           1 | FALSE              |
+|     112 | AB4      | CB4858    |   158.358  |                           1 | FALSE              |
+|     112 | ECA251   | CB4858    |    73.5843 |                           1 | FALSE              |
+|     112 | JU1960   | NA        |    55.0373 |                           1 | FALSE              |
+|     159 | BRC20067 | BRC20067  |    33.5934 |                           1 | FALSE              |
+|     159 | BRC20113 | NA        |    38.9916 |                           1 | FALSE              |
+
+The `isotype_groups.tsv` classifies the strains into isotypes. There may exist issues, however.
+
