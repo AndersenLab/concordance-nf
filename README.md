@@ -13,13 +13,28 @@ nextflow run Andersenlab/concordance-nf
 The following variables should be set in either `~/.nextflow/config` OR `nextflow.config`
 
 A temporary directory:
+```
 tmpdir = "/projects/b1042/AndersenLab/tmp`"
+```
+
+A genome name and reference file. The reference must be indexed with bwa.
+```
 genome = "WS245"
 reference = "/projects/b1059/data/genomes/c_elegans/${genome}/${genome}.fa.gz"
-cores = 16 # For numb
+```
+
+__Cores/threads for different processes__
+```
+alignment_cores = 16
+variant_cores = 6
 compression_threads = 4
-analysis_dir = "/projects/b1059/analysis/WI-concordance"
-data_dir = "/projects/b1059/data"
+```
+
+__Output directories__
+```
+analysis_dir = "/projects/b1059/analysis/WI-concordance" # For output of results.
+SM_alignments_dir = "/projects/b1059/data/alignments/WI/SM" # For sample level alignments.
+```
 
 email="Danielecook@gmail.com"
 
