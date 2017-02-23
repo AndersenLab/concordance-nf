@@ -36,8 +36,8 @@ analysis_dir = "/projects/b1059/analysis/WI-concordance" # For output of results
 SM_alignments_dir = "/projects/b1059/data/alignments/WI/SM" # For sample level alignments.
 ```
 
-email="Danielecook@gmail.com"
-
+Process level options can also be set:
+```
 process {
     module='gcc/5.1.0:R/3.3.1'
     $perform_alignment {
@@ -61,3 +61,4 @@ process {
     }
 
 }
+```
