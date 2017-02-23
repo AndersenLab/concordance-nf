@@ -1,8 +1,10 @@
 #!/usr/bin/env nextflow
 tmpdir = config.tmpdir
 reference = config.reference
-cores = config.cores
+cores = config.alignment_cores
+variant_cores = config.variant_cores
 genome = config.genome
+data_dir = config.data_dir
 analysis_dir = config.analysis_dir
 
 // Define contigs here!
@@ -56,7 +58,7 @@ process setup_dirs {
 */
 process perform_alignment {
 
-    cpus 4
+    cpus cores
 
     tag { fq_pair_id }
 
@@ -200,6 +202,8 @@ process merge_bam {
 
     cpus cores
 
+    publishDir SM_alignments_dir, mode: 'copy', pattern: '*.bam*'
+
     tag { SM }
 
     input:
@@ -234,7 +238,6 @@ process merge_bam {
     sambamba index --nthreads=${cores} ${SM}.bam
     """
 }
-
 
 
 process SM_idx_stats {
@@ -373,6 +376,8 @@ process coverage_SM_merge {
 
 
 process call_variants_individual {
+
+    cpus variant_cores
 
     tag { SM }
 
@@ -633,6 +638,7 @@ process process_concordance_results {
         file("xconcordance.svg")
         file("xconcordance.png")
         file("isotype_groups.tsv")
+        file("isotype_count.txt")
         file("gtcheck.tsv") into gtcheck_network
 
     """
