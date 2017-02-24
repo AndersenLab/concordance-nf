@@ -38,8 +38,12 @@ strainJSON.each { SM, RG ->
     }
 }
 
-strain_set_file = Channel.fromPath('strain_set.json')
-
+if (test == 'true') {
+    println "Running with test data"
+    strain_set_file = Channel.fromPath('strain_set_test.json')
+} else {
+    strain_set_file = Channel.fromPath('strain_set.json')
+}
 process setup_dirs {
 
     executor 'local'
@@ -69,10 +73,12 @@ process perform_alignment {
         val "${fq_pair_id}" into fq_pair_id_cov
         val "${fq_pair_id}" into fq_pair_id_idxstats
         val "${fq_pair_id}" into fq_pair_id_bamstats
+        val "${fq_pair_id}" into fq_pair_concordance
         file "${fq_pair_id}.bam" into fq_cov_bam
         file "${fq_pair_id}.bam.bai" into fq_cov_bam_indices
         set file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") into fq_idx_stats_bam
         set file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") into fq_stats_bam
+        set file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") into fq_concordance
 
     
     """
@@ -191,6 +197,34 @@ process combine_fq_bam_stats {
         echo -e "fq_pair_id\\tvariable\\tvalue\\tcomment" > fq_bam_stats.tsv
         cat ${stat_files.join(" ")} >> fq_bam_stats.tsv
     """
+}
+
+/*
+    fq for concordance
+*/
+
+process fq_concordance {
+
+    publishDir "genotypes/", mode: 'copy'
+
+    tag { fq_pair_id }
+    
+    cpus cores
+
+    input:
+        val fq_pair_id from fq_pair_concordance
+        set file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") from fq_concordance
+
+    output:
+        file("${fq_pair_id}.tsv")
+
+    """
+        sambamba mpileup ${fq_pair_id}.bam \
+            --samtools --fasta-ref ${reference} --redo-BAQ --output-tags DP,AD,ADF,ADR,SP --BCF \
+            --bcftools --skip-variants indels --variants-only --multiallelic-caller -O z | \
+            bcftools query -f '%CHROM\\t%POS\\t[%GT]\\n' > ${fq_pair_id}.tsv
+    """
+
 }
 
 /* 
