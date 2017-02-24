@@ -4,7 +4,7 @@ reference = config.reference
 cores = config.alignment_cores
 variant_cores = config.variant_cores
 genome = config.genome
-data_dir = config.data_dir
+SM_alignments_dir = config.SM_alignments_dir
 analysis_dir = config.analysis_dir
 
 // Define contigs here!
