@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript --vanilla
 library(tidyverse)
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+try(setwd(dirname(rstudioapi::getActiveDocumentContext()$path)))
 # Used in calculating isotypes
 stack_list <- function(x) {
   if (is.null(names(x)) == T) {
@@ -9,7 +9,7 @@ stack_list <- function(x) {
   stack(x)
 }
 
-coverage_20 <- (readr::read_tsv("../SM/SM_coverage.tsv") %>%
+coverage_20 <- (readr::read_tsv("SM_coverage.tsv") %>%
                   dplyr::filter(coverage > 20))$strain
 
 WI <- readr::read_tsv("https://docs.google.com/spreadsheets/d/1V6YHzblaDph01sFDI8YK_fP0H7sVebHQTXypGdiQIjI/pub?output=tsv") 
@@ -68,7 +68,7 @@ isotype_groups <- stack_list(unique(lapply(strain_list, function(x) {
   dplyr::distinct(data, .keep_all = T) %>%
   tidyr::unnest()
 
-SM_coverage <- readr::read_tsv("../SM/SM_coverage.tsv")
+SM_coverage <- readr::read_tsv("SM_coverage.tsv")
 
 isotype_groups <- dplyr::left_join(isotype_groups, existing_WI, by = c("strain")) %>%
   dplyr::left_join(SM_coverage) %>%

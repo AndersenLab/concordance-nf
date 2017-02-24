@@ -28,9 +28,16 @@ import groovy.json.JsonSlurper
 def strain_set = []
 def isotype_set = []
 
+if (test == 'true') {
+    strain_json = "strain_set_test.json"
+} else {
+    strain_json = "strain_set.json"
+}
+
 // Strain
-def strainFile = new File('strain_set.json')
+def strainFile = new File(strain_json)
 def strainJSON = new JsonSlurper().parseText(strainFile.text)
+strain_set_file = Channel.fromPath(strain_json)
 
 strainJSON.each { SM, RG ->
     RG.each { k, v ->
@@ -38,12 +45,6 @@ strainJSON.each { SM, RG ->
     }
 }
 
-if (test == 'true') {
-    println "Running with test data"
-    strain_set_file = Channel.fromPath('strain_set_test.json')
-} else {
-    strain_set_file = Channel.fromPath('strain_set.json')
-}
 process setup_dirs {
 
     executor 'local'
@@ -73,12 +74,10 @@ process perform_alignment {
         val "${fq_pair_id}" into fq_pair_id_cov
         val "${fq_pair_id}" into fq_pair_id_idxstats
         val "${fq_pair_id}" into fq_pair_id_bamstats
-        val "${fq_pair_id}" into fq_pair_concordance
         file "${fq_pair_id}.bam" into fq_cov_bam
         file "${fq_pair_id}.bam.bai" into fq_cov_bam_indices
         set file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") into fq_idx_stats_bam
         set file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") into fq_stats_bam
-        set file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") into fq_concordance
 
     
     """
@@ -199,33 +198,6 @@ process combine_fq_bam_stats {
     """
 }
 
-/*
-    fq for concordance
-*/
-
-process fq_concordance {
-
-    publishDir "genotypes/", mode: 'copy'
-
-    tag { fq_pair_id }
-    
-    cpus cores
-
-    input:
-        val fq_pair_id from fq_pair_concordance
-        set file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") from fq_concordance
-
-    output:
-        file("${fq_pair_id}.tsv")
-
-    """
-        sambamba mpileup ${fq_pair_id}.bam \
-            --samtools --fasta-ref ${reference} --redo-BAQ --output-tags DP,AD,ADF,ADR,SP --BCF \
-            --bcftools --skip-variants indels --variants-only --multiallelic-caller -O z | \
-            bcftools query -f '%CHROM\\t%POS\\t[%GT]\\n' > ${fq_pair_id}.tsv
-    """
-
-}
 
 /* 
   Merge - Generate SM Bam
@@ -249,11 +221,13 @@ process merge_bam {
         val SM into merged_SM_union
         val SM into merged_SM_idxstats
         val SM into merged_SM_bamstats
+        val SM into merged_SM_fq_concordance
         set file("${SM}.bam"), file("${SM}.bam.bai") into merged_bams_for_coverage
         set file("${SM}.bam"), file("${SM}.bam.bai") into merged_bams_individual
         set file("${SM}.bam"), file("${SM}.bam.bai") into merged_bams_union
         set file("${SM}.bam"), file("${SM}.bam.bai") into bams_idxstats
         set file("${SM}.bam"), file("${SM}.bam.bai") into bams_stats
+        set file("${SM}.bam"), file("${SM}.bam.bai") into fq_concordance_bam
         file("${SM}.duplicates.txt") into duplicates_file
         
     """
@@ -271,6 +245,41 @@ process merge_bam {
     picard MarkDuplicates I=${SM}.merged.bam O=${SM}.bam M=${SM}.duplicates.txt VALIDATION_STRINGENCY=SILENT REMOVE_DUPLICATES=false
     sambamba index --nthreads=${cores} ${SM}.bam
     """
+}
+
+process fq_concordance {
+
+    echo true
+
+    cpus cores
+
+    publishDir analysis_dir + "/genotypes", mode: 'copy'
+
+    input:
+        val SM from merged_SM_fq_concordance
+        set file("${SM}.bam"), file("${SM}.bam.bai") from fq_concordance_bam
+
+    output:
+        file("rg_gt.tsv")
+
+    """
+        # Split bam file into individual read groups; Ignore MtDNA
+        contigs="`samtools view -H ${SM}.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40 | grep -v 'MtDNA' | tr ' ' '\\n'`"
+        samtools split -f '%!.%.' ${SM}.bam
+        parallel samtools index {} ::: *.bam
+
+        # Generate a site list for the set of fastqs
+        rg_list="`ls -1 *.bam | sed 's/.bam//g'`"
+        # Perform individual-level calling
+        parallel --verbose "samtools mpileup --redo-BAQ -r {1} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} {2}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {2}.{1}.site_list.tsv" ::: \${contigs} ::: \${rg_list}
+        cat *.site_list.tsv  | sort -k1,1 -k2,2n | uniq > site_list.srt.tsv
+        bgzip site_list.srt.tsv -c > site_list.srt.tsv.gz && tabix -s1 -b2 -e2 site_list.srt.tsv.gz
+        
+        # Call a union set of variants
+        parallel --verbose "samtools mpileup --redo-BAQ -r {1} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} {2}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O u | bcftools query -f '%CHROM\\t%POS[\\t%GT\\t{2}\\n]' >> rg_gt.tsv" ::: \${contigs} ::: \${rg_list}
+
+    """
+
 }
 
 
@@ -454,6 +463,7 @@ process merge_variant_list {
 
     output:
         set file("sitelist.tsv.gz"), file("sitelist.tsv.gz.tbi") into gz_sitelist
+        set file("sitelist.tsv.gz"), file("sitelist.tsv.gz.tbi") into fq_gz_sitelist
         file("sitelist.tsv") into sitelist
 
 
@@ -464,13 +474,13 @@ process merge_variant_list {
     """
 }
 
+
 /* 
     Call variants using the merged site list
 */
 
 
 union_vcf_channel = merged_bams_union.spread(gz_sitelist)
-
 
 
 process call_variants_union {
@@ -681,35 +691,11 @@ process process_concordance_results {
 
 }
 
-/*
-    Network analysis
-*/
-
-process examine_concordance_network {
-
-    publishDir analysis_dir + "/concordance", mode: "copy"
-
-    input:
-        file("graph.py") from Channel.fromPath("graph.py")
-        file("SM_coverage.tsv") from SM_coverage_network
-        file("gtcheck.tsv") from gtcheck_network
-        file("sitelist.tsv") from sitelist
-
-    output:
-        file("problem_SM.tsv")
-
-    """
-    echo "None!" > problem_SM.tsv
-    python graph.py
-    """
-
-}
-
 filtered_vcf_phylo_contig = filtered_vcf_phylo.spread(["I", "II", "III", "IV", "V", "X", "MtDNA", "genome"])
 
 /*
     Phylo analysis
-*/
+
 
 process phylo_analysis {
 
@@ -753,3 +739,4 @@ process plot_trees {
     """
 
 }
+*/
