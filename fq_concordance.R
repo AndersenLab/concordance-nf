@@ -1,16 +1,23 @@
 library(tidyverse)
 
-df <- dplyr::bind_rows(lapply(dir(pattern = "*.tsv"), function(x) {
-  readr::read_tsv(x, col_names = c("CHROM", "POS", "fq", "sm", "gt")) %>%
-  tidyr::unite("CHROM_POS", CHROM, POS, sep = "_")
-})) %>%
-  dplyr::mutate(gt = as.integer(substring(gt, 1, 1)))
+gt_dict = list("0/0" = 0, "1/1" = 1)
 
-fq_sm <- df %>% dplyr::select(fq, sm) %>% dplyr::distinct()
+df <- dplyr::bind_rows(lapply(dir(pattern = "rg_gt.tsv"), function(x) {
+  readr::read_tsv(x, col_names = c("CHROM", "POS", "gt", "fq", "SM")) %>%
+  tidyr::unite("CHROM_POS", CHROM, POS, sep = "_") %>%
+  dplyr::filter(gt %in% c("0/0", "1/1")) %>%
+  dplyr::mutate(gt = gt_dict[gt][[1]])
+})) 
 
-d <- df %>% dplyr::select(-sm) %>%
+SM <- df$SM[[1]]
+
+d <- df %>%
        tidyr::spread(fq, gt) %>%
-       dplyr::select(-CHROM_POS)
+       dplyr::select(-CHROM_POS, -SM)
+
+if(ncol(d) == 1) {
+  q()
+} else {
 
 # Alt only
 alt_only<- apply(d,2,function(x)colSums(x==d, na.rm = T))
@@ -29,6 +36,7 @@ total <- total %>% dplyr::tbl_df() %>%
   dplyr::rename(a = fq)
   
 df <- dplyr::left_join(alt_only, total) %>%
-  dplyr::mutate(concordance = concordant_sites/total_sites) %>%
-  dplyr::left_join(fq_sm %>% dplyr::rename(a = fq, sm1 = sm)) %>% 
-  dplyr::left_join(fq_sm %>% dplyr::rename(b = fq, sm2 = sm))
+  dplyr::mutate(concordance = concordant_sites/total_sites, SM = SM)
+
+readr::write_tsv(df, "out.tsv", col_names = F)
+}
