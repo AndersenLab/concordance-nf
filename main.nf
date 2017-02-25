@@ -418,7 +418,8 @@ process fq_concordance {
         # Split bam file into individual read groups; Ignore MtDNA
         contigs="`samtools view -H input.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40 | grep -v 'MtDNA' | tr ' ' '\\n'`"
         samtools split -f '%!.%.' input.bam
-        parallel samtools index {} ::: `ls -1 *.bam | grep -v 'input.bam'` # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
+        # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
+        parallel samtools index {} ::: `ls -1 *.bam | grep -v 'input.bam'` 
 
         # Generate a site list for the set of fastqs
         rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
