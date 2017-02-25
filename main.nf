@@ -577,8 +577,6 @@ process concatenate_union_vcf {
 
 process filter_union_vcf {
 
-    publishDir analysis_dir + "/vcf", mode: 'copy'
-
     input:
         set file("merged.raw.vcf.gz"), file("merged.raw.vcf.gz.csi") from raw_vcf_concatenated
 
