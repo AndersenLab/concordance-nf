@@ -57,10 +57,21 @@ A complete example is below:
   }
 ```
 
+### Running the pipeline
+
+The pipeline comes packaged with test data. When the workflow is run, you  must specify whether you are using test data or real data. 
+
+__`-e.test=true`__ - Uses `strain_set_test.json`
+
+__`-e.test=false`__ - Uses `strain_set.json`
+
+
+I recommend running the command as show, to enable caching.
+
 ```
-# cd to directory of fastqs
-nextflow run Andersenlab/concordance-nf
+nextflow run main.nf -e.test=false -resume
 ```
+
 ### Configuration
 
 The following variables should be set in either `~/.nextflow/config` OR `nextflow.config`
@@ -126,26 +137,20 @@ The pipeline results are output in the following structure.
 ```
 ├── strain_set.json # A list of strains used in the analysis (json format).
 ├── concordance
-│   ├── concordance.png # Histogram of concordance, colored by isotype.
+│   ├── concordance.png                      # Histogram of concordance, colored by isotype.
 │   ├── concordance.svg
-│   ├── filtered.stats.snp.txt # Statistics on filtered snp set used to examine concordance.
-│   ├── fq_concordance.tsv # Concordance numbers at a fastq-level
-│   ├── gtcheck.tsv # output of bcftools gtcheck 
-│   ├── isotype_groups.tsv # Generated isotype groupings.
-│   ├── problem_SM.tsv # Problematic groupings, if any.
-│   ├── xconcordance.png # Zoomed in view of concordance.
+│   ├── fq_concordance.tsv -   -  -  -  -  - # Concordance numbers at a fastq-level
+│   ├── gtcheck.tsv                          # output of bcftools gtcheck 
+│   ├── isotype_groups.tsv -   -  -  -  -  - # Generated isotype groupings.
+│   ├── problem_SM.tsv                       # Problematic groupings, if any.
+│   ├── xconcordance.png -  -  -  -  -  -  - # Zoomed in view of concordance.
 │   └── xconcordance.svg
 ├── duplicates
-│   └── bam_duplicates.tsv # Summary of duplicate reads (determined by picard).
-├── fq
-│   ├── fq_bam_idxstats.tsv
-│   ├── fq_bam_stats.tsv
-│   ├── fq_coverage.full.tsv
-│   └── fq_coverage.tsv
+│   └── bam_duplicates.tsv                   # Summary of duplicate reads (determined by picard).
 ├── phylo
-│   ├── genome.png # Genome phylogeny
+│   ├── genome.png                           # Genome phylogeny
 │   ├── genome.svg
-│   ├── genome.tree # Newick format of tree
+│   ├── genome.tree                          # Newick format of tree
 │   ├── I.png # Chromosome I phylogeny
 │   ├── I.svg
 │   ├── I.tree
@@ -154,20 +159,25 @@ The pipeline results are output in the following structure.
 │   ├── MtDNA.svg
 │   ├── MtDNA.tree
 ├── sitelist
-│   ├── sitelist.tsv # List of sites used in genotyping.
-│   ├── sitelist.tsv.gz # Compressed and indexed (with .tbi) list of sites.
-│   ├── sitelist.count.txt
-│   └── sitelist.tsv.gz.tbi
+│   ├── sitelist.count.txt                   # Number of sites called.
+│   ├── sitelist.tsv                         # List of sites used in genotyping.
+│   ├── sitelist.tsv.gz                      # Compressed and indexed (with .tbi) list of sites.
+│   └── sitelist.tsv.gz.tbi                
+├── fq
+│   ├── fq_bam_idxstats.tsv   -  -  -  -  -  # Stats generated with `samtools idxstats`
+│   ├── fq_bam_stats.tsv                     # Stats generated with `samtools stats`
+│   ├── fq_coverage.full.tsv  -  -  -  -  -  # Detailed coverage numbers
+│   └── fq_coverage.tsv                      # Summary coverage numbers.
 ├── SM
-│   ├── SM_bam_idxstats.tsv
+│   ├── SM_bam_idxstats.tsv                  # Strain-level statistics; Same as fq descriptions above.
 │   ├── SM_bam_stats.tsv
 │   ├── SM_coverage.full.tsv
 │   └── SM_coverage.tsv
 └── vcf
     ├── concordance.vcf.gz        # Filtered VCF, filtered for true SNPs (no homomorphic sites)
-    ├── concordance.vcf.gz.csi
-    ├── concordance.stats
-    └── union_vcfs.txt
+    ├── concordance.vcf.gz.csi    # Concordance VCF Index
+    ├── concordance.stats         # Stats from concordance vcf. Contains unumber of SNPs
+    └── union_vcfs.txt            # List of VCFs that are combined for performing concordance.
 ```
 
 ### Details on files above
