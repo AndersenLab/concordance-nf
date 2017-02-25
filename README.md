@@ -128,7 +128,8 @@ The pipeline results are output in the following structure.
 ├── concordance
 │   ├── concordance.png # Histogram of concordance, colored by isotype.
 │   ├── concordance.svg
-│   ├── filtered.stats.snp.txt # Statistics on filtered snp set used to examine concordance. 
+│   ├── filtered.stats.snp.txt # Statistics on filtered snp set used to examine concordance.
+│   ├── fq_concordance.tsv # Concordance numbers at a fastq-level
 │   ├── gtcheck.tsv # output of bcftools gtcheck 
 │   ├── isotype_groups.tsv # Generated isotype groupings.
 │   ├── problem_SM.tsv # Problematic groupings, if any.
@@ -155,6 +156,7 @@ The pipeline results are output in the following structure.
 ├── sitelist
 │   ├── sitelist.tsv # List of sites used in genotyping.
 │   ├── sitelist.tsv.gz # Compressed and indexed (with .tbi) list of sites.
+│   ├── sitelist.count.txt
 │   └── sitelist.tsv.gz.tbi
 ├── SM
 │   ├── SM_bam_idxstats.tsv
@@ -162,23 +164,9 @@ The pipeline results are output in the following structure.
 │   ├── SM_coverage.full.tsv
 │   └── SM_coverage.tsv
 └── vcf
-    ├── concordance.gtcheck.tsv
-    ├── ED3046,ED3049.strain_comparison.tsv
-    ├── filtered.stats.txt
-    ├── gt.txt
-    ├── merged.filtered.snp.vcf.gz
-    ├── merged.filtered.snp.vcf.gz.csi
-    ├── merged.filtered.stats
-    ├── merged.filtered.vcf.gz
-    ├── merged.filtered.vcf.gz.csi
-    ├── MY23,BRC20231.strain_comparison.tsv
-    ├── NIC256,NIC263.strain_comparison.tsv
-    ├── NIC272,NIC273.strain_comparison.tsv
-    ├── QX1211,QX1215.strain_comparison.tsv
-    ├── QX1211,QX1216.strain_comparison.tsv
-    ├── QX1215,QX1216.strain_comparison.tsv
-    ├── spectrum.txt
-    ├── strain_comparison.tsv
+    ├── concordance.vcf.gz        # Filtered VCF, filtered for true SNPs (no homomorphic sites)
+    ├── concordance.vcf.gz.csi
+    ├── concordance.stats
     └── union_vcfs.txt
 ```
 
