@@ -631,13 +631,11 @@ process calculate_gtcheck {
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_snp_vcf
 
     output:
-        file("filtered.stats.snp.txt")
         file("gtcheck.tsv") into gtcheck
 
     """
         echo -e "discordance\\tsites\\tavg_min_depth\\ti\\tj" > gtcheck.tsv
         bcftools gtcheck -H -G 1 concordance.vcf.gz | egrep '^CN' | cut -f 2-6 >> gtcheck.tsv
-        bcftools stats --verbose concordance.vcf.gz > filtered.stats.snp.txt
     """
 
 }
