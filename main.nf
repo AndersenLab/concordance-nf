@@ -610,15 +610,15 @@ process gen_gtcheck_vcf {
         set file("merged.filtered.vcf.gz"), file("merged.filtered.vcf.gz.csi") from filtered_vcf_gtcheck
 
     output:
-        set file("merged.filtered.snp.vcf.gz"), file("merged.filtered.snp.vcf.gz.csi") into filtered_snp_vcf
-        file("merged.filtered.snp.vcf.gz.csi")
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into filtered_snp_vcf
+        file("concordance.vcf.gz.csi")
 
     """
         bcftools view -O v merged.filtered.vcf.gz | \\
         vk filter REF --min=1 - | \\
         vk filter ALT --min=1 - | \\
-        bcftools view -O z  > merged.filtered.snp.vcf.gz
-        bcftools index merged.filtered.snp.vcf.gz
+        bcftools view -O z  > concordance.vcf.gz
+        bcftools index concordance.vcf.gz
     """
 
 }
@@ -628,7 +628,7 @@ process calculate_gtcheck {
     publishDir analysis_dir + "/concordance", mode: 'copy'
 
     input:
-        set file("merged.filtered.snp.vcf.gz"), file("merged.filtered.snp.vcf.gz.csi") from filtered_snp_vcf
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_snp_vcf
 
     output:
         file("filtered.stats.snp.txt")
@@ -636,8 +636,8 @@ process calculate_gtcheck {
 
     """
         echo -e "discordance\\tsites\\tavg_min_depth\\ti\\tj" > gtcheck.tsv
-        bcftools gtcheck -H -G 1 merged.filtered.snp.vcf.gz | egrep '^CN' | cut -f 2-6 >> gtcheck.tsv
-        bcftools stats --verbose merged.filtered.snp.vcf.gz > filtered.stats.snp.txt
+        bcftools gtcheck -H -G 1 concordance.vcf.gz | egrep '^CN' | cut -f 2-6 >> gtcheck.tsv
+        bcftools stats --verbose concordance.vcf.gz > filtered.stats.snp.txt
     """
 
 }
@@ -647,13 +647,13 @@ process stat_tsv {
     publishDir analysis_dir + "/vcf", mode: 'copy'
 
     input:
-        set file("merged.filtered.vcf.gz"), file("merged.filtered.vcf.gz.csi") from filtered_vcf_stat
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_stat
 
     output:
-        file("merged.filtered.stats") into filtered_stats
+        file("concordance.stats") into filtered_stats
 
     """
-        bcftools stats --verbose merged.filtered.vcf.gz > merged.filtered.stats
+        bcftools stats --verbose concordance.vcf.gz > concordance.stats
     """
 
 }
