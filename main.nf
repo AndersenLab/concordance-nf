@@ -427,7 +427,7 @@ process fq_concordance {
         # Generate a site list for the set of fastqs
         rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
         # Perform individual-level calling
-        for rg in $rg_list; do
+        for rg in \$rg_list; do
             echo \${rg}
             echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {}.\${rg}.site_list.tsv"
         done;
@@ -435,7 +435,7 @@ process fq_concordance {
         bgzip site_list.srt.tsv -c > site_list.srt.tsv.gz && tabix -s1 -b2 -e2 site_list.srt.tsv.gz
         
         # Call a union set of variants
-        for rg in $rg_list; do
+        for rg in \$rg_list; do
             echo \${rg}
             echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O v | vk geno het-polarization - | bcftools query -f '%CHROM\\t%POS[\\t%GT\\t{2}\\t${SM}\\n]' | grep -v '0/1' >> rg_gt.tsv"
         done;
