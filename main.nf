@@ -200,7 +200,6 @@ process combine_fq_bam_stats {
   Merge - Generate SM Bam
 */
 
-
 process merge_bam {
 
     cpus cores
@@ -421,7 +420,8 @@ process fq_concordance {
         contigs="`samtools view -H input.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40 | grep -v 'MtDNA' | tr ' ' '\\n'`"
         samtools split -f '%!.%.' input.bam
         # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
-        parallel --max-procs ${variant_cores} samtools index {} ::: `ls -1 *.bam | grep -v 'input.bam'` 
+        bam_list="`ls -1 *.bam | grep -v 'input.bam'`"
+        parallel --max-procs ${variant_cores} samtools index {} ::: \${bam_list} 
 
         # Generate a site list for the set of fastqs
         rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
