@@ -406,6 +406,8 @@ process call_variants_individual {
 
 process fq_concordance {
 
+    cpus variant_cores
+
     tag { SM }
 
     input:
@@ -419,17 +421,17 @@ process fq_concordance {
         contigs="`samtools view -H input.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40 | grep -v 'MtDNA' | tr ' ' '\\n'`"
         samtools split -f '%!.%.' input.bam
         # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
-        parallel samtools index {} ::: `ls -1 *.bam | grep -v 'input.bam'` 
+        parallel --max-procs ${variant_cores} samtools index {} ::: `ls -1 *.bam | grep -v 'input.bam'` 
 
         # Generate a site list for the set of fastqs
         rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
         # Perform individual-level calling
-        parallel --verbose "samtools mpileup --redo-BAQ -r {1} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} {2}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {2}.{1}.site_list.tsv" ::: \${contigs} ::: \${rg_list}
+        parallel --max-procs ${variant_cores} --verbose "samtools mpileup --redo-BAQ -r {1} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} {2}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {2}.{1}.site_list.tsv" ::: \${contigs} ::: \${rg_list}
         cat *.site_list.tsv  | sort -k1,1 -k2,2n | uniq > site_list.srt.tsv
         bgzip site_list.srt.tsv -c > site_list.srt.tsv.gz && tabix -s1 -b2 -e2 site_list.srt.tsv.gz
         
         # Call a union set of variants
-        parallel --verbose "samtools mpileup --redo-BAQ -r {1} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} {2}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O v | vk geno het-polarization - | bcftools query -f '%CHROM\\t%POS[\\t%GT\\t{2}\\t${SM}\\n]' | grep -v '0/1' >> rg_gt.tsv" ::: \${contigs} ::: \${rg_list}
+        parallel --max-procs ${variant_cores} --verbose "samtools mpileup --redo-BAQ -r {1} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} {2}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O v | vk geno het-polarization - | bcftools query -f '%CHROM\\t%POS[\\t%GT\\t{2}\\t${SM}\\n]' | grep -v '0/1' >> rg_gt.tsv" ::: \${contigs} ::: \${rg_list}
 
         touch out.tsv
         Rscript --vanilla ${fq_concordance_script} 
