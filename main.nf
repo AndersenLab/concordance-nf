@@ -437,7 +437,7 @@ process fq_concordance {
         # Call a union set of variants
         for rg in \$rg_list; do
             echo \${rg}
-            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O v | vk geno het-polarization - | bcftools query -f '%CHROM\\t%POS[\\t%GT\\t{2}\\t${SM}\\n]' | grep -v '0/1' >> rg_gt.tsv"
+            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O v | vk geno het-polarization - | bcftools query -f '%CHROM\\t%POS[\\t%GT\\t\${rg}\\t${SM}\\n]' | grep -v '0/1' >> rg_gt.tsv"
         done;
         touch out.tsv
         Rscript --vanilla ${fq_concordance_script} 
