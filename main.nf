@@ -205,7 +205,7 @@ process merge_bam {
 
     cpus cores
 
-    publishDir SM_alignments_dir, mode: 'copy', pattern: '*.bam*'
+    publishDir SM_alignments_dir + "/WI/SM", mode: 'copy', pattern: '*.bam*'
 
     tag { SM }
 
