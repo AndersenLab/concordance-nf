@@ -174,7 +174,7 @@ The pipeline results are output in the following structure.
 │   ├── SM_coverage.full.tsv
 │   └── SM_coverage.tsv
 └── vcf
-    ├── concordance.vcf.gz        # Filtered VCF, filtered for true SNPs (no homomorphic sites)
+    ├── concordance.vcf.gz        # Filtered VCF, filtered for true SNPs (no monomorphic sites)
     ├── concordance.vcf.gz.csi    # Concordance VCF Index
     ├── concordance.stats         # Stats from concordance vcf. Contains unumber of SNPs
     └── union_vcfs.txt            # List of VCFs that are combined for performing concordance.
