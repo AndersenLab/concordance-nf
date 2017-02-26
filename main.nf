@@ -421,7 +421,7 @@ process fq_concordance {
         samtools split -f '%!.%.' input.bam
         # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
         bam_list="`ls -1 *.bam | grep -v 'input.bam'`"
-        ls -1 *.bam | grep -v 'input.bam' | parallel --max-procs ${variant_cores} --dryrun samtools index {}
+        ls -1 *.bam | grep -v 'input.bam' | parallel --max-procs ${variant_cores} samtools index {}
 
         # Generate a site list for the set of fastqs
         rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
