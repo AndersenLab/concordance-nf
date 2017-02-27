@@ -7,7 +7,7 @@ df <- readr::read_tsv("rg_gt.tsv", col_names = c("CHROM", "POS", "gt", "fq", "SM
       dplyr::filter(gt %in% c("0/0", "1/1")) %>%
       dplyr::rowwise() %>%
       dplyr::mutate(gt = gt_dict[gt][[1]]) %>% 
-      dplyr::ungroup
+      dplyr::ungroup()
 
 SM <- df$SM[[1]]
 
