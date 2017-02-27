@@ -397,7 +397,6 @@ process call_variants_individual {
     bcftools filter --include 'DP > 3' | \\
     egrep '(^#|1/1)' | \\
     bcftools query -f '%CHROM\\t%POS\\t%REF,%ALT\\n' > ${SM}.individual.sites.tsv
-
     """
 }
 
@@ -591,16 +590,12 @@ process filter_union_vcf {
         set file("merged.filtered.vcf.gz"), file("merged.filtered.vcf.gz.csi") into filtered_vcf
 
     """
-        min_depth=${min_depth}
-        qual=${qual}
-        mq=${mq}
-        dv_dp=${dv_dp}
-
         bcftools view merged.raw.vcf.gz | \\
-        bcftools filter -O u --threads 16 --set-GTs . --include "QUAL >= \${qual} || FORMAT/GT == '0/0'" |  \\
-        bcftools filter -O u --threads 16 --set-GTs . --include "FORMAT/DP > \${min_depth}" | \\
-        bcftools filter -O u --threads 16 --set-GTs . --include "INFO/MQ > \${mq}" | \\
-        bcftools filter -O u --threads 16 --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= \${dv_dp} || FORMAT/GT == '0/0'" | \\
+        bcftools filter -O u --threads 16 --set-GTs . --include "QUAL >= ${qual} || FORMAT/GT == '0/0'" |  \\
+        bcftools filter -O u --threads 16 --set-GTs . --include "FORMAT/DP > ${min_depth}" | \\
+        bcftools filter -O u --threads 16 --set-GTs . --include "INFO/MQ > ${mq}" | \\
+        bcftools filter -O u --threads 16 --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
+        vk filter MISSING --max=0.05 - | \\
         bcftools view -O z - > merged.filtered.vcf.gz
         bcftools index -f merged.filtered.vcf.gz
     """
