@@ -77,16 +77,15 @@ isotype_groups <- dplyr::left_join(isotype_groups, existing_WI, by = c("strain")
   dplyr::mutate(avg_lat = abs(latitude - mean(latitude, na.rm = T)), avg_lon = abs(longitude - mean(longitude, na.rm = T))) %>%
   dplyr::mutate(unique_isotypes_per_group = length(unique(purrr::discard(isotype, is.na)))) %>%
   dplyr::group_by(isotype) %>%
-  dplyr::mutate(isotype_in_multiple_groups = unique_isotypes_per_group > 1) %>%
+  dplyr::mutate(unique_groups_per_isotype = length(unique(group))) %>%
   dplyr::group_by(strain) %>%
   dplyr::mutate(strain_in_multiple_isotypes = length(strain) > 1) %>%
   dplyr::mutate(location_issue = (avg_lat > 5 | avg_lon > 5)) %>%
   dplyr::select(-avg_lat,-avg_lon) %>%
   dplyr::group_by(group) %>%
-  dplyr::mutate(strain_conflict = any(strain_in_multiple_isotypes,
+  dplyr::mutate(strain_conflict = any(unique_isotypes_per_group > 1,
+                                      unique_groups_per_isotype > 1,
                                       location_issue,
-                                      isotype_in_multiple_groups,
-                                      unique_isotypes_per_group > 1,
                                       na.rm = T))
 
 ggplot(gtcheck) +

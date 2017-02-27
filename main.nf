@@ -597,7 +597,6 @@ process filter_union_vcf {
         dv_dp=${dv_dp}
 
         bcftools view merged.raw.vcf.gz | \\
-        vk geno het-polarization - | \\
         bcftools filter -O u --threads 16 --set-GTs . --include "QUAL >= \${qual} || FORMAT/GT == '0/0'" |  \\
         bcftools filter -O u --threads 16 --set-GTs . --include "FORMAT/DP > \${min_depth}" | \\
         bcftools filter -O u --threads 16 --set-GTs . --include "INFO/MQ > \${mq}" | \\
