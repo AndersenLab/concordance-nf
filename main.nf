@@ -618,6 +618,7 @@ process gen_gtcheck_vcf {
         bcftools view -O v merged.filtered.vcf.gz | \\
         vk filter REF --min=1 - | \\
         vk filter ALT --min=1 - | \\
+        vk filter ALT --max=0.99 - | \\
         bcftools view -O z  > concordance.vcf.gz
         bcftools index concordance.vcf.gz
     """
