@@ -2,12 +2,12 @@ library(tidyverse)
 
 gt_dict = list("0/0" = 0, "1/1" = 1)
 
-df <- dplyr::bind_rows(lapply(dir(pattern = "rg_gt.tsv"), function(x) {
-  readr::read_tsv(x, col_names = c("CHROM", "POS", "gt", "fq", "SM")) %>%
-  tidyr::unite("CHROM_POS", CHROM, POS, sep = "_") %>%
-  dplyr::filter(gt %in% c("0/0", "1/1")) %>%
-  dplyr::mutate(gt = gt_dict[gt][[1]])
-})) 
+df <- readr::read_tsv("rg_gt.tsv", col_names = c("CHROM", "POS", "gt", "fq", "SM")) %>%
+      tidyr::unite("CHROM_POS", CHROM, POS, sep = "_") %>%
+      dplyr::filter(gt %in% c("0/0", "1/1")) %>%
+      dplyr::rowwise() %>%
+      dplyr::mutate(gt = gt_dict[gt][[1]]) %>% 
+      dplyr::ungroup
 
 SM <- df$SM[[1]]
 
