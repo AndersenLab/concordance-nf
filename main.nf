@@ -510,7 +510,13 @@ process call_variants_union {
         order=`echo \${contigs} | tr ' ' '\\n' | awk '{ print "${SM}." \$1 ".union.vcf.gz" }'`
 
         # Output variant sites
-        bcftools concat \${order} -O v | vk geno het-polarization - | bcftools view -O z > ${SM}.union.vcf.gz
+        bcftools concat \${order} -O v | \\
+        vk geno het-polarization - | \\
+        bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "QUAL >= ${qual} || FORMAT/GT == '0/0'" |  \\
+        bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "FORMAT/DP > ${min_depth}" | \\
+        bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "INFO/MQ > ${mq}" | \\
+        bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
+        bcftools view -O z > ${SM}.union.vcf.gz
         bcftools index ${SM}.union.vcf.gz
         rm \${order}
     """
@@ -562,10 +568,7 @@ process concatenate_union_vcf {
 
     echo true
 
-    //publishDir analysis_dir + "/vcf", mode: 'copy'
-
     input:
-        //val chrom from contigs_list_in
         val merge_vcf from raw_vcf.toSortedList()
 
     output:
@@ -587,50 +590,27 @@ process filter_union_vcf {
         set file("merged.raw.vcf.gz"), file("merged.raw.vcf.gz.csi") from raw_vcf_concatenated
 
     output:
-        set file("merged.filtered.vcf.gz"), file("merged.filtered.vcf.gz.csi") into filtered_vcf
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into filtered_vcf
 
     """
         bcftools view merged.raw.vcf.gz | \\
-        bcftools filter -O u --threads 16 --set-GTs . --include "QUAL >= ${qual} || FORMAT/GT == '0/0'" |  \\
-        bcftools filter -O u --threads 16 --set-GTs . --include "FORMAT/DP > ${min_depth}" | \\
-        bcftools filter -O u --threads 16 --set-GTs . --include "INFO/MQ > ${mq}" | \\
-        bcftools filter -O u --threads 16 --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
+        vk filter ALT --max=0.99 - | \\
         vk filter MISSING --max=0.05 - | \\
-        bcftools view -O z - > merged.filtered.vcf.gz
-        bcftools index -f merged.filtered.vcf.gz
-    """
-}
-
-filtered_vcf.into { filtered_vcf_gtcheck; filtered_vcf_stat; gtcheck_no_all_ref; filtered_vcf_phylo }
-
-process gen_gtcheck_vcf {
-
-    publishDir analysis_dir + "/vcf", mode: 'copy'
-
-    input:
-        set file("merged.filtered.vcf.gz"), file("merged.filtered.vcf.gz.csi") from filtered_vcf_gtcheck
-
-    output:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into filtered_snp_vcf
-        file("concordance.vcf.gz.csi")
-
-    """
-        bcftools view -O v merged.filtered.vcf.gz | \\
         vk filter REF --min=1 - | \\
         vk filter ALT --min=1 - | \\
-        vk filter ALT --max=0.99 - | \\
-        bcftools view -O z  > concordance.vcf.gz
+        bcftools view -O z - > concordance.vcf.gz
         bcftools index concordance.vcf.gz
     """
-
 }
+
+filtered_vcf.into { filtered_vcf_gtcheck; filtered_vcf_stat; filtered_vcf_phylo }
 
 process calculate_gtcheck {
 
     publishDir analysis_dir + "/concordance", mode: 'copy'
 
     input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_snp_vcf
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_gtcheck
 
     output:
         file("gtcheck.tsv") into gtcheck
@@ -693,7 +673,7 @@ filtered_vcf_phylo_contig = filtered_vcf_phylo.spread(["I", "II", "III", "IV", "
 
 /*
     Phylo analysis
-
+*/
 
 process phylo_analysis {
 
@@ -737,4 +717,4 @@ process plot_trees {
     """
 
 }
-*/
+
