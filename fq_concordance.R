@@ -2,7 +2,7 @@ library(tidyverse)
 
 gt_dict = list("0/0" = 0, "1/1" = 1)
 
-df <- readr::read_tsv("rg_gt.tsv", col_names = c("CHROM", "POS", "gt", "fq", "SM")) %>%
+df <- readr::read_tsv("rg_gt.tsv", col_names = c("CHROM", "POS", "gt", "SM", "fq")) %>%
       tidyr::unite("CHROM_POS", CHROM, POS, sep = "_") %>%
       dplyr::filter(gt %in% c("0/0", "1/1")) %>%
       dplyr::rowwise() %>%
