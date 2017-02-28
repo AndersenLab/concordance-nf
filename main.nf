@@ -433,7 +433,16 @@ process fq_concordance {
         
         # Call a union set of variants
         for rg in \$rg_list; do
-            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O v | vk geno het-polarization - | bcftools query -f '%CHROM\\t%POS[\\t%GT\\t\${rg}\\t${SM}\\n]' | grep -v '0/1' >> {}.\${rg}.rg_gt.tsv"
+            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O z > {}.\${rg}.vcf.gz"
+            order=`echo \${contigs} | tr ' ' '\\n' | awk -v rg=\${rg} '{ print \$1 "." rg ".vcf.gz" }'`
+            # Output variant sites
+            bcftools concat \${order} -O v | \\
+            vk geno het-polarization - | \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "QUAL >= 10 || FORMAT/GT == '0/0'" |  \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "FORMAT/DP > 3" | \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "INFO/MQ > ${mq}" | \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
+            bcftools query -f '%CHROM\\t%POS[\\t%GT\\t\${rg}\\t${SM}\\n]' | grep -v '0/1' > \${rg}.rg_gt.tsv
         done;
         cat *.rg_gt.tsv > rg_gt.tsv
         touch out.tsv
