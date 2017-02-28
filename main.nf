@@ -670,9 +670,9 @@ process process_concordance_results {
         file("xconcordance.png")
         file("isotype_groups.tsv")
         file("isotype_count.txt")
-        file("gtcheck.tsv") into gtcheck_network
 
     """
+    # Run concordance analysis
     Rscript --vanilla ${process_concordance}
     """
 
