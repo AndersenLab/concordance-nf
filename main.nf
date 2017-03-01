@@ -575,7 +575,7 @@ contig_raw_vcf = contig_list*.concat(".merged.raw.vcf.gz")
 
 process concatenate_union_vcf {
 
-    echo true
+    publishDir analysis_dir + "/vcf", mode: 'copy'
 
     input:
         val merge_vcf from raw_vcf.toSortedList()
@@ -594,6 +594,8 @@ process concatenate_union_vcf {
 }
 
 process filter_union_vcf {
+
+    publishDir analysis_dir + "/vcf", mode: 'copy'
 
     input:
         set file("merged.raw.vcf.gz"), file("merged.raw.vcf.gz.csi") from raw_vcf_concatenated
@@ -655,7 +657,6 @@ concordance_script = Channel.fromPath("process_concordance.R")
 
 process process_concordance_results {
 
-
     publishDir analysis_dir + "/concordance", mode: "copy"
 
     input:
@@ -697,6 +698,7 @@ process phylo_analysis {
         set val(contig), file("${contig}.tree") into trees
 
     """
+        # generate tree
         if [ "${contig}" == "genome" ]
         then
             vk phylo tree nj merged.filtered.vcf.gz > genome.tree
