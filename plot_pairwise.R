@@ -1,4 +1,4 @@
-df <- readr::read_tsv("strain_comparison.tsv", col_names = c("CHROM", "POS", "PAIR"))
+df <- readr::read_tsv("out.tsv", col_names = c("CHROM", "POS", "PAIR"))
 
 ggplot(df, aes(x = POS)) + 
   geom_histogram() +
