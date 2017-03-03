@@ -727,8 +727,8 @@ process pairwise_variant_compare {
     """
         bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > out.tsv
         Rscript --vanilla ${plot_pairwise_script}
-        mv out.png ${group}.${isotype}.${pair/,/_}.png
-        mv out.tsv ${group}.${isotype}.${pair/,/_}.tsv
+        mv out.png ${group}.${isotype}.${pair.replace(",","_")}.png
+        mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
     """
 
 }
