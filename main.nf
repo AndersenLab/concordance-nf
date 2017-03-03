@@ -347,9 +347,9 @@ process coverage_SM {
 
     """
         bam coverage ${SM}.bam > ${SM}.coverage.tsv
-        bam coverage --window=1E6 ${SM}.bam > ${SM}.1mb.coverage.tsv
-        bam coverage --window=1E5 ${SM}.bam > ${SM}.100kb.coverage.tsv
-        bam coverage --window=1E4 ${SM}.bam > ${SM}.10kb.coverage.tsv
+        bam coverage --window=1000000 ${SM}.bam > ${SM}.1mb.coverage.tsv
+        bam coverage --window=100000 ${SM}.bam > ${SM}.100kb.coverage.tsv
+        bam coverage --window=10000 ${SM}.bam > ${SM}.10kb.coverage.tsv
     """
 }
 
