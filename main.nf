@@ -692,7 +692,7 @@ process pairwise_variant_compare {
 
     publishDir analysis_dir + "/pairwise", mode: 'copy'
 
-    tag { strain }
+    tag { pair }
 
     input:
         set val(pair), val(group), val(isotype) from pairwise_groups.splitText( by:1 ) { it.trim().split("\t") }
