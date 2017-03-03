@@ -6,7 +6,7 @@ df <- readr::read_tsv("out.tsv", col_names = c("CHROM", "POS", "PAIR")) %>%
 
 if (max(df$count) > 250) {
     set_max = NA
-else {
+} else {
     set_max = 250
 }
 
