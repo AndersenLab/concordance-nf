@@ -683,7 +683,7 @@ process process_concordance_results {
     """
     # Run concordance analysis
     Rscript --vanilla ${process_concordance}
-    cat isotype_groups.tsv |awk  '{ curr_strain = $2; curr_group = $1; if (group_prev == curr_group) { print prev_strain "," curr_strain "\t" $1 "\t" $3 } ; prev_strain = $2; group_prev = $1; }' > pairwise_groups.txt
+    cat isotype_groups.tsv |awk  '{ curr_strain = \$2; curr_group = \$1; if (group_prev == curr_group) { print prev_strain "," curr_strain "\t" \$1 "\t" \$3 } ; prev_strain = \$2; group_prev = \$1; }' > pairwise_groups.txt
     """
 
 }
