@@ -13,6 +13,7 @@ contigs = Channel.from(contig_list)
 
 fq_concordance_script = file("fq_concordance.R")
 process_concordance = file("process_concordance.R")
+plot_pairwise_script = file("plot_pairwise.R")
 
 /*
     Filtering configuration
@@ -533,6 +534,7 @@ process call_variants_union {
 }
 
 
+
 process generate_union_vcf_list {
 
     cpus 1 
@@ -602,6 +604,8 @@ process filter_union_vcf {
 
     output:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into filtered_vcf
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into filtered_vcf_pairwise
+        file("sample_list.txt") into sample_list
 
     """
         bcftools view merged.raw.vcf.gz | \\
@@ -616,6 +620,7 @@ process filter_union_vcf {
 
 filtered_vcf.into { filtered_vcf_gtcheck; filtered_vcf_stat; filtered_vcf_phylo }
 
+
 process calculate_gtcheck {
 
     publishDir analysis_dir + "/concordance", mode: 'copy'
@@ -625,6 +630,7 @@ process calculate_gtcheck {
 
     output:
         file("gtcheck.tsv") into gtcheck
+        file("gtcheck.tsv") into pairwise_compare_gtcheck
 
     """
         echo -e "discordance\\tsites\\tavg_min_depth\\ti\\tj" > gtcheck.tsv
@@ -632,6 +638,7 @@ process calculate_gtcheck {
     """
 
 }
+
 
 process stat_tsv {
 
@@ -671,10 +678,35 @@ process process_concordance_results {
         file("xconcordance.png")
         file("isotype_groups.tsv")
         file("isotype_count.txt")
+        file("pairwise_groups.txt") into pairwise_groups
 
     """
     # Run concordance analysis
     Rscript --vanilla ${process_concordance}
+    cat isotype_groups.tsv |awk  '{ curr_strain = $2; curr_group = $1; if (group_prev == curr_group) { print prev_strain "," curr_strain "\t" $1 "\t" $3 } ; prev_strain = $2; group_prev = $1; }' > pairwise_groups.txt
+    """
+
+}
+
+// Look for diverged regions among isotypes.
+process pairwise_variant_compare {
+
+    publishDir analysis_dir + "/pairwise", mode: 'copy'
+
+    tag { strain }
+
+    input:
+        set val(pair), val(group), val(isotype) from pairwise_groups.splitText( by:1 ) { it.trim().split("\t") }
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise 
+
+    output:
+        file("${group}.${isotype}.${pair}.png")
+
+
+    """
+        bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > ${group}.${pair}.strain_comparison.tsv
+        Rscript --vanilla ${plot_pairwise_script}
+        mv out.png ${group}.${isotype}.${pair}.png
     """
 
 }

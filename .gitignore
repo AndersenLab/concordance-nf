@@ -90,3 +90,6 @@ ENV/
 
 work/
 .nextflow.log*
+
+.nextflow
+dag.*
