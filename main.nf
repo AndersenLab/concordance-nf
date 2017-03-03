@@ -675,13 +675,27 @@ process process_concordance_results {
         file("concordance.png")
         file("xconcordance.svg")
         file("xconcordance.png")
-        file("isotype_groups.tsv")
+        file("isotype_groups.tsv") into isotype_groups
         file("isotype_count.txt")
-        file("pairwise_groups.txt") into pairwise_groups
 
     """
     # Run concordance analysis
     Rscript --vanilla ${process_concordance}
+    """
+
+}
+
+process generate_isotype_groups {
+
+    executor 'local'
+
+    input:
+        file("isotype_groups.tsv") from isotype_groups
+
+    output:
+        file("pairwise_groups.txt") into pairwise_groups
+
+    """
     cat isotype_groups.tsv |awk  '{ curr_strain = \$2; curr_group = \$1; if (group_prev == curr_group) { print prev_strain "," curr_strain "\t" \$1 "\t" \$3 } ; prev_strain = \$2; group_prev = \$1; }' > pairwise_groups.txt
     """
 
