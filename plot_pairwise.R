@@ -1,3 +1,4 @@
+library(tidyverse)
 df <- readr::read_tsv("out.tsv", col_names = c("CHROM", "POS", "PAIR"))
 
 ggplot(df, aes(x = POS)) + 
