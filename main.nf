@@ -340,10 +340,16 @@ process coverage_SM {
 
     output:
         file("${SM}.coverage.tsv") into SM_coverage
+        file("${SM}.1mb.coverage.tsv") into SM_1mb_coverage
+        file("${SM}.100kb.coverage.tsv") into SM_100kb_coverage
+        file("${SM}.10kb.coverage.tsv") into SM_10kb_coverage
 
 
     """
         bam coverage ${SM}.bam > ${SM}.coverage.tsv
+        bam coverage --window=1E6 ${SM}.bam > ${SM}.1mb.coverage.tsv
+        bam coverage --window=1E5 ${SM}.bam > ${SM}.100kb.coverage.tsv
+        bam coverage --window=1E4 ${SM}.bam > ${SM}.10kb.coverage.tsv
     """
 }
 
@@ -352,14 +358,12 @@ process coverage_SM_merge {
 
     publishDir analysis_dir + "/SM", mode: 'copy'
 
-
     input:
         val sm_set from SM_coverage.toSortedList()
 
     output:
         file("SM_coverage.full.tsv")
         file("SM_coverage.tsv") into SM_coverage_merged
-        file("SM_coverage.tsv") into SM_coverage_network
 
     """
         echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.full.tsv
@@ -368,8 +372,32 @@ process coverage_SM_merge {
         # Generate condensed version
         cat <(echo -e 'strain\\tcoverage') <(cat SM_coverage.full.tsv | grep 'genome' | grep 'depth_of_coverage' | cut -f 1,6 | sort) > SM_coverage.tsv
     """
-
 }
+
+process coverage_bins_merge {
+
+    publishDir analysis_dir + "/SM", mode: 'copy'
+
+    input:
+        val mb from SM_1mb_coverage.toSortedList()
+        val kb_100 from SM_100kb_coverage.toSortedList()
+        val kb_10 from SM_10kb_coverage.toSortedList()
+
+    output:
+        file("SM_coverage.mb.tsv")
+
+    """
+        echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.mb.tsv
+        cat ${mb.join(" ")} >> SM_coverage.mb.tsv
+
+        echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.kb_100.tsv
+        cat ${kb_100.join(" ")} >> SM_coverage.kb_100.tsv
+
+        echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.kb_10.tsv
+        cat ${kb_10.join(" ")} >> SM_coverage.kb_10.tsv
+    """
+}
+
 
 process call_variants_individual {
 
