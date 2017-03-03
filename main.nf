@@ -696,7 +696,7 @@ process generate_isotype_groups {
         file("pairwise_groups.txt") into pairwise_groups
 
     """
-    cat isotype_groups.tsv |awk  '{ curr_strain = \$2; curr_group = \$1; if (group_prev == curr_group) { print prev_strain "," curr_strain "\t" \$1 "\t" \$3 } ; prev_strain = \$2; group_prev = \$1; }' > pairwise_groups.txt
+    cat isotype_groups.tsv | awk '{ curr_strain = \$2; curr_group = \$1; if (group_prev == curr_group) { print prev_strain "," curr_strain "\t" \$1 "\t" \$3 } ; prev_strain = \$2; group_prev = \$1; }' > pairwise_groups.txt
     """
 
 }
@@ -727,8 +727,8 @@ process pairwise_variant_compare {
     """
         bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > out.tsv
         Rscript --vanilla ${plot_pairwise_script}
-        mv out.png ${group}.${isotype}.${pair}.png
-        mv out.tsv ${group}.${isotype}.${pair}.tsv
+        mv out.png ${group}.${isotype}.${pair/,/_}.png
+        mv out.tsv ${group}.${isotype}.${pair/,/_}.tsv
     """
 
 }
