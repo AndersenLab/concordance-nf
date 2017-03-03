@@ -701,6 +701,8 @@ process generate_isotype_groups {
 
 }
 
+pairwise_groups_input = pairwise_groups.splitText( by:1 ) { it.trim() }
+
 // Look for diverged regions among isotypes.
 process pairwise_variant_compare {
 
@@ -709,7 +711,7 @@ process pairwise_variant_compare {
     tag { pair }
 
     input:
-        val(pair_group) from pairwise_groups.splitText( by:1 ) { it.trim() }
+        val(pair_group) from pairwise_groups_input
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise 
 
     output:
