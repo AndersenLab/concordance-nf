@@ -712,7 +712,7 @@ process pairwise_variant_compare {
 
     input:
         val(pair_group) from pairwise_groups_input
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise 
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise.first() 
 
     output:
         file("${group}.${isotype}.${pair}.png")
