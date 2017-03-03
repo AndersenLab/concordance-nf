@@ -701,7 +701,7 @@ process generate_isotype_groups {
 
 }
 
-pairwise_groups_input = pairwise_groups.splitText( by:1 ) { it.trim() }
+pairwise_groups_input = pairwise_groups.splitText( by:1 )
 
 // Look for diverged regions among isotypes.
 process pairwise_variant_compare {
@@ -719,7 +719,7 @@ process pairwise_variant_compare {
         file("${group}.${isotype}.${pair}.tsv")
 
     script:
-        pair_group = pair_group.split("\t")
+        pair_group = pair_group.trim().split("\t")
         pair = pair_group[0]
         group = pair_group[1]
         isotype = pair_group[2]
