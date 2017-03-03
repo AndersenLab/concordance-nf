@@ -725,10 +725,10 @@ process pairwise_variant_compare {
         isotype = pair_group[2]
 
     """
-        bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > ${group}.${pair}.tsv
+        bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > out.tsv
         Rscript --vanilla ${plot_pairwise_script}
         mv out.png ${group}.${isotype}.${pair}.png
-        mv out.png ${group}.${isotype}.${pair}.tsv
+        mv out.tsv ${group}.${isotype}.${pair}.tsv
     """
 
 }
