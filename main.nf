@@ -605,7 +605,6 @@ process filter_union_vcf {
     output:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into filtered_vcf
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into filtered_vcf_pairwise
-        file("sample_list.txt") into sample_list
 
     """
         bcftools view merged.raw.vcf.gz | \\
@@ -701,12 +700,14 @@ process pairwise_variant_compare {
 
     output:
         file("${group}.${isotype}.${pair}.png")
+        file("${group}.${isotype}.${pair}.tsv")
 
 
     """
-        bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > ${group}.${pair}.strain_comparison.tsv
+        bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > ${group}.${pair}.tsv
         Rscript --vanilla ${plot_pairwise_script}
         mv out.png ${group}.${isotype}.${pair}.png
+        mv out.png ${group}.${isotype}.${pair}.tsv
     """
 
 }
