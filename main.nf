@@ -715,8 +715,8 @@ process pairwise_variant_compare {
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise.first() 
 
     output:
-        file("${group}.${isotype}.${pair}.png")
-        file("${group}.${isotype}.${pair}.tsv")
+        file("${group}.${isotype}.${pair.replace(",","_")}.png")
+        file("${group}.${isotype}.${pair.replace(",","_")}.tsv")
 
     script:
         pair_group = pair_group.trim().split("\t")
