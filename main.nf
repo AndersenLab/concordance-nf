@@ -695,13 +695,18 @@ process pairwise_variant_compare {
     tag { pair }
 
     input:
-        set val(pair), val(group), val(isotype) from pairwise_groups.splitText( by:1 ) { it.trim().split("\t") }
+        val(pair_group) from pairwise_groups.splitText( by:1 ) { it.trim() }
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise 
 
     output:
         file("${group}.${isotype}.${pair}.png")
         file("${group}.${isotype}.${pair}.tsv")
 
+    script:
+        pair_group = pair_group.split("\t")
+        pair = pair_group[0]
+        group = pair_group[1]
+        isotype = pair_group[2]
 
     """
         bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > ${group}.${pair}.tsv
