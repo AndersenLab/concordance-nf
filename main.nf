@@ -424,74 +424,6 @@ process call_variants_individual {
     """
 }
 
-
-process fq_concordance {
-
-    cpus variant_cores
-
-    tag { SM }
-
-    input:
-        set val(SM), file("input.bam"), file("input.bam.bai") from fq_concordance_bam
-
-    output:
-        file('out.tsv') into fq_concordance_out
-
-    """
-        # Split bam file into individual read groups; Ignore MtDNA
-        contigs="`samtools view -H input.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40 | grep -v 'MtDNA' | tr ' ' '\\n'`"
-        samtools split -f '%!.%.' input.bam
-        # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
-        bam_list="`ls -1 *.bam | grep -v 'input.bam'`"
-
-        ls -1 *.bam | grep -v 'input.bam' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools index {}"
-
-        # Generate a site list for the set of fastqs
-        rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
-        # Perform individual-level calling
-        for rg in \$rg_list; do
-            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {}.\${rg}.site_list.tsv"
-        done;
-        cat *.site_list.tsv  | sort --temporary-directory=${tmpdir} -k1,1 -k2,2n | uniq > site_list.srt.tsv
-        bgzip site_list.srt.tsv -c > site_list.srt.tsv.gz && tabix -s1 -b2 -e2 site_list.srt.tsv.gz
-        
-        # Call a union set of variants
-        for rg in \$rg_list; do
-            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O z > {}.\${rg}.vcf.gz"
-            order=`echo \${contigs} | tr ' ' '\\n' | awk -v rg=\${rg} '{ print \$1 "." rg ".vcf.gz" }'`
-            # Output variant sites
-            bcftools concat \${order} -O v | \\
-            vk geno het-polarization - | \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "QUAL >= 10 || FORMAT/GT == '0/0'" |  \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "FORMAT/DP > 3" | \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "INFO/MQ > ${mq}" | \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
-            bcftools query -f '%CHROM\\t%POS[\\t%GT\\t${SM}\\n]' | grep -v '0/1' | awk -v rg=\${rg} '{ print \$0 "\\t" rg }' > \${rg}.rg_gt.tsv
-        done;
-        cat *.rg_gt.tsv > rg_gt.tsv
-        touch out.tsv
-        Rscript --vanilla ${fq_concordance_script} 
-    """
-}
-
-process combine_fq_concordance {
-
-    publishDir analysis_dir + "/concordance", mode: 'copy'
-
-    input:
-        file("out*.tsv") from fq_concordance_out.toSortedList()
-
-    output:
-        file("fq_concordance.tsv")
-
-    """
-        cat <(echo 'a\tb\tconcordant_sites\ttotal_sites\tconcordance\tSM') out*.tsv > fq_concordance.tsv
-    """
-
-
-}
-
-
 /*
     Merge individual sites
 */
@@ -804,4 +736,73 @@ process plot_trees {
     """
 
 }
+
+
+
+process fq_concordance {
+
+    cpus variant_cores
+
+    tag { SM }
+
+    input:
+        set val(SM), file("input.bam"), file("input.bam.bai") from fq_concordance_bam
+
+    output:
+        file('out.tsv') into fq_concordance_out
+
+    """
+        # Split bam file into individual read groups; Ignore MtDNA
+        contigs="`samtools view -H input.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40 | grep -v 'MtDNA' | tr ' ' '\\n'`"
+        samtools split -f '%!.%.' input.bam
+        # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
+        bam_list="`ls -1 *.bam | grep -v 'input.bam'`"
+
+        ls -1 *.bam | grep -v 'input.bam' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools index {}"
+
+        # Generate a site list for the set of fastqs
+        rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
+        # Perform individual-level calling
+        for rg in \$rg_list; do
+            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {}.\${rg}.site_list.tsv"
+        done;
+        cat *.site_list.tsv  | sort --temporary-directory=${tmpdir} -k1,1 -k2,2n | uniq > site_list.srt.tsv
+        bgzip site_list.srt.tsv -c > site_list.srt.tsv.gz && tabix -s1 -b2 -e2 site_list.srt.tsv.gz
+        
+        # Call a union set of variants
+        for rg in \$rg_list; do
+            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O z > {}.\${rg}.vcf.gz"
+            order=`echo \${contigs} | tr ' ' '\\n' | awk -v rg=\${rg} '{ print \$1 "." rg ".vcf.gz" }'`
+            # Output variant sites
+            bcftools concat \${order} -O v | \\
+            vk geno het-polarization - | \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "QUAL >= 10 || FORMAT/GT == '0/0'" |  \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "FORMAT/DP > 3" | \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "INFO/MQ > ${mq}" | \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
+            bcftools query -f '%CHROM\\t%POS[\\t%GT\\t${SM}\\n]' | grep -v '0/1' | awk -v rg=\${rg} '{ print \$0 "\\t" rg }' > \${rg}.rg_gt.tsv
+        done;
+        cat *.rg_gt.tsv > rg_gt.tsv
+        touch out.tsv
+        Rscript --vanilla ${fq_concordance_script} 
+    """
+}
+
+process combine_fq_concordance {
+
+    publishDir analysis_dir + "/concordance", mode: 'copy'
+
+    input:
+        file("out*.tsv") from fq_concordance_out.toSortedList()
+
+    output:
+        file("fq_concordance.tsv")
+
+    """
+        cat <(echo 'a\tb\tconcordant_sites\ttotal_sites\tconcordance\tSM') out*.tsv > fq_concordance.tsv
+    """
+
+
+}
+
 
