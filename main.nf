@@ -385,6 +385,8 @@ process coverage_bins_merge {
 
     output:
         file("SM_coverage.mb.tsv")
+        file("SM_coverage.kb_100.tsv")
+        file("SM_coverage.kb_10.tsv")
 
     """
         echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.mb.tsv
