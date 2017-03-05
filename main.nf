@@ -384,19 +384,12 @@ process coverage_bins_merge {
         val kb_10 from SM_10kb_coverage.toSortedList()
 
     output:
-        file("SM_coverage.mb.tsv")
-        file("SM_coverage.kb_100.tsv")
-        file("SM_coverage.kb_10.tsv")
+        file("SM_coverage.mb.tsv.gz")
 
     """
         echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.mb.tsv
         cat ${mb.join(" ")} >> SM_coverage.mb.tsv
-
-        echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.kb_100.tsv
-        cat ${kb_100.join(" ")} >> SM_coverage.kb_100.tsv
-
-        echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.kb_10.tsv
-        cat ${kb_10.join(" ")} >> SM_coverage.kb_10.tsv
+        gzip SM_coverage.mb.tsv
     """
 }
 
@@ -746,7 +739,6 @@ process pairwise_variant_compare {
 
     output:
         file("${group}.${isotype}.${pair.replace(",","_")}.png")
-        file("${group}.${isotype}.${pair.replace(",","_")}.tsv")
 
     script:
         pair_group = pair_group.trim().split("\t")
@@ -755,7 +747,7 @@ process pairwise_variant_compare {
         isotype = pair_group[2]
 
     """
-        bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > out.tsv
+        bcftools query -f '%CHROM\t%POS[\t%GT]\n' -s ${pair} concordance.vcf.gz | grep -v '\./\.' > out.tsv
         Rscript --vanilla ${plot_pairwise_script}
         mv out.png ${group}.${isotype}.${pair.replace(",","_")}.png
         mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
