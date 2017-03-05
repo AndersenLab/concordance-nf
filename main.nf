@@ -679,6 +679,7 @@ process pairwise_variant_compare {
         isotype = pair_group[2]
 
     """
+        # Output diff sites
         bcftools query -f '%CHROM\t%POS[\t%GT]\n' -s ${pair} concordance.vcf.gz > out.tsv
         Rscript --vanilla ${plot_pairwise_script}
         mv out.png ${group}.${isotype}.${pair.replace(",","_")}.png
@@ -737,8 +738,7 @@ process plot_trees {
 
 }
 
-
-
+/*
 process fq_concordance {
 
     cpus variant_cores
@@ -804,5 +804,5 @@ process combine_fq_concordance {
 
 
 }
-
+*/
 
