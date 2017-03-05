@@ -1,7 +1,7 @@
 library(tidyverse)
 df <- readr::read_tsv("out.tsv", col_names = c("CHROM", "POS", "A", "B")) %>%
   dplyr::mutate(bin = round(POS/1E6)) %>%
-  dplyr::filter(A != "./.", B != "./.") %>%
+  dplyr::filter(A != "./.", B != "./.", A != "0/1", B != "0/1") %>%
   dplyr::mutate(concordant = (A == B), discordant = (A != B)) %>%
   dplyr::group_by(CHROM,bin) %>%
   dplyr::summarize(count=n(),
