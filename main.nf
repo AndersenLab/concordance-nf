@@ -661,7 +661,7 @@ pairwise_groups_input = pairwise_groups.splitText( by:1 )
 // Look for diverged regions among isotypes.
 process pairwise_variant_compare {
 
-    publishDir analysis_dir + "/pairwise", mode: 'copy'
+    publishDir analysis_dir + "/pairwise", mode: 'copy', overwrite: true
 
     tag { pair }
 
