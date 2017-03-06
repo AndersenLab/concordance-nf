@@ -656,87 +656,6 @@ process generate_isotype_groups {
 
 }
 
-pairwise_groups_input = pairwise_groups.splitText( by:1 )
-
-// Look for diverged regions among isotypes.
-process pairwise_variant_compare {
-
-    publishDir analysis_dir + "/pairwise", mode: 'copy', overwrite: true
-
-    tag { pair }
-
-    input:
-        val(pair_group) from pairwise_groups_input
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise.first() 
-
-    output:
-        file("${group}.${isotype}.${pair.replace(",","_")}.png")
-
-    script:
-        pair_group = pair_group.trim().split("\t")
-        pair = pair_group[0]
-        group = pair_group[1]
-        isotype = pair_group[2]
-
-    """
-        # Run new
-        bcftools query -f '%CHROM\t%POS[\t%GT]\n' -s ${pair} concordance.vcf.gz > out.tsv
-        Rscript --vanilla ${plot_pairwise_script}
-        mv out.png ${group}.${isotype}.${pair.replace(",","_")}.png
-        mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
-    """
-
-}
-
-filtered_vcf_phylo_contig = filtered_vcf_phylo.spread(["I", "II", "III", "IV", "V", "X", "MtDNA", "genome"])
-
-/*
-    Phylo analysis
-*/
-
-process phylo_analysis {
-
-    publishDir analysis_dir + "/phylo", mode: "copy", overwrite: true
-
-    tag { contig }
-
-    input:
-        set file("merged.filtered.vcf.gz"), file("merged.filtered.vcf.gz.csi"), val(contig) from filtered_vcf_phylo_contig
-
-    output:
-        set val(contig), file("${contig}.tree") into trees
-
-    """
-        # generate tree
-        if [ "${contig}" == "genome" ]
-        then
-            vk phylo tree nj merged.filtered.vcf.gz > genome.tree
-        else
-            vk phylo tree nj merged.filtered.vcf.gz ${contig} > ${contig}.tree
-        fi
-    """
-}
-
-trees_phylo = trees.spread(Channel.fromPath("process_trees.R"))
-
-process plot_trees {
-
-    publishDir analysis_dir + "/phylo", mode: "copy"
-
-    tag { contig }
-
-    input:
-        set val(contig), file("${contig}.tree"), file("process_trees.R") from trees_phylo
-
-    output:
-        file("${contig}.svg")
-        file("${contig}.png")
-
-    """
-    Rscript --vanilla process_trees.R ${contig}
-    """
-
-}
 
 
 process fq_concordance {
@@ -804,5 +723,88 @@ process combine_fq_concordance {
 
 
 }
+
+pairwise_groups_input = pairwise_groups.splitText( by:1 )
+
+// Look for diverged regions among isotypes.
+process pairwise_variant_compare {
+
+    publishDir analysis_dir + "/pairwise", mode: 'copy', overwrite: true
+
+    tag { pair }
+
+    input:
+        val(pair_group) from pairwise_groups_input
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise.first() 
+
+    output:
+        file("${group}.${isotype}.${pair.replace(",","_")}.png")
+
+    script:
+        pair_group = pair_group.trim().split("\t")
+        pair = pair_group[0]
+        group = pair_group[1]
+        isotype = pair_group[2]
+
+    """
+        bcftools query -f '%CHROM\t%POS[\t%GT]\n' -s ${pair} concordance.vcf.gz > out.tsv
+        Rscript --vanilla ${plot_pairwise_script}
+        # Rename files
+        mv out.png ${group}.${isotype}.${pair.replace(",","_")}.png
+        mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
+    """
+
+}
+
+filtered_vcf_phylo_contig = filtered_vcf_phylo.spread(["I", "II", "III", "IV", "V", "X", "MtDNA", "genome"])
+
+/*
+    Phylo analysis
+*/
+
+process phylo_analysis {
+
+    publishDir analysis_dir + "/phylo", mode: "copy", overwrite: true
+
+    tag { contig }
+
+    input:
+        set file("merged.filtered.vcf.gz"), file("merged.filtered.vcf.gz.csi"), val(contig) from filtered_vcf_phylo_contig
+
+    output:
+        set val(contig), file("${contig}.tree") into trees
+
+    """
+        # generate tree
+        if [ "${contig}" == "genome" ]
+        then
+            vk phylo tree nj merged.filtered.vcf.gz > genome.tree
+        else
+            vk phylo tree nj merged.filtered.vcf.gz ${contig} > ${contig}.tree
+        fi
+    """
+}
+
+trees_phylo = trees.spread(Channel.fromPath("process_trees.R"))
+
+process plot_trees {
+
+    publishDir analysis_dir + "/phylo", mode: "copy"
+
+    tag { contig }
+
+    input:
+        set val(contig), file("${contig}.tree"), file("process_trees.R") from trees_phylo
+
+    output:
+        file("${contig}.svg")
+        file("${contig}.png")
+
+    """
+    Rscript --vanilla process_trees.R ${contig}
+    """
+
+}
+
 
 
