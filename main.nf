@@ -738,7 +738,7 @@ process plot_trees {
 
 }
 
-/*
+
 process fq_concordance {
 
     cpus variant_cores
@@ -804,5 +804,5 @@ process combine_fq_concordance {
 
 
 }
-*/
+
 
