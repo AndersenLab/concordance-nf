@@ -108,7 +108,7 @@ process coverage_fq {
 
 process coverage_fq_merge {
 
-    publishDir analysis_dir + "/fq", mode: 'copy'
+    publishDir analysis_dir + "/fq", mode: 'copy', overwrite: true
 
     input:
         file fq_set from fq_coverage.toSortedList()
@@ -145,7 +145,7 @@ process fq_idx_stats {
 
 process fq_combine_idx_stats {
 
-    publishDir analysis_dir + "/fq", mode: 'copy'
+    publishDir analysis_dir + "/fq", mode: 'copy', overwrite: true
 
     input:
         file("?.stat.txt") from fq_idxstats_set.toSortedList()
@@ -181,7 +181,7 @@ process fq_bam_stats {
 
 process combine_fq_bam_stats {
 
-    publishDir analysis_dir + "/fq", mode: 'copy'
+    publishDir analysis_dir + "/fq", mode: 'copy', overwrite: true
 
     input:
         file("*.stat.txt") from fq_bam_stat_files.toSortedList()
@@ -255,7 +255,7 @@ process SM_idx_stats {
 
 process SM_combine_idx_stats {
 
-    publishDir analysis_dir + "/SM", mode: 'copy'
+    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
 
     input:
         file("*.stat.txt") from bam_idxstats_set.toSortedList()
@@ -292,7 +292,7 @@ process SM_bam_stats {
 
 process combine_SM_bam_stats {
 
-    publishDir analysis_dir + "/SM", mode: 'copy'
+    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
 
     input:
         file("?.stat.txt") from SM_bam_stat_files.toSortedList()
@@ -310,7 +310,7 @@ process combine_SM_bam_stats {
 
 process format_duplicates {
 
-    publishDir analysis_dir + "/duplicates", mode: 'copy'
+    publishDir analysis_dir + "/duplicates", mode: 'copy', overwrite: true
 
     input:
         val duplicates_set from duplicates_file.toSortedList()
@@ -356,7 +356,7 @@ process coverage_SM {
 
 process coverage_SM_merge {
 
-    publishDir analysis_dir + "/SM", mode: 'copy'
+    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
 
     input:
         val sm_set from SM_coverage.toSortedList()
@@ -376,7 +376,7 @@ process coverage_SM_merge {
 
 process coverage_bins_merge {
 
-    publishDir analysis_dir + "/SM", mode: 'copy'
+    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
 
     input:
         val mb from SM_1mb_coverage.toSortedList()
@@ -430,7 +430,7 @@ process call_variants_individual {
 
 process merge_variant_list {
 
-    publishDir analysis_dir + "/sitelist", mode: 'copy'
+    publishDir analysis_dir + "/sitelist", mode: 'copy', overwrite: true
     
     input:
         val sites from individual_sites.toSortedList()
@@ -696,7 +696,7 @@ filtered_vcf_phylo_contig = filtered_vcf_phylo.spread(["I", "II", "III", "IV", "
 
 process phylo_analysis {
 
-    publishDir analysis_dir + "/phylo", mode: "copy"
+    publishDir analysis_dir + "/phylo", mode: "copy", overwrite: true
 
     tag { contig }
 
@@ -790,7 +790,7 @@ process fq_concordance {
 
 process combine_fq_concordance {
 
-    publishDir analysis_dir + "/concordance", mode: 'copy'
+    publishDir analysis_dir + "/concordance", mode: 'copy', overwrite: true
 
     input:
         file("out*.tsv") from fq_concordance_out.toSortedList()
