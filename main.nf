@@ -748,8 +748,7 @@ process pairwise_variant_compare {
 
     """
         bcftools query -f '%CHROM\t%POS[\t%GT]\n' -s ${pair} concordance.vcf.gz > out.tsv
-        Rscript --vanilla ${plot_pairwise_script}
-        # Rename files
+        Rscript --vanilla ${plot_pairwise_script} 
         mv out.png ${group}.${isotype}.${pair.replace(",","_")}.png
         mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
     """
