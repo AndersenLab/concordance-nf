@@ -7,8 +7,8 @@ url = "https://docs.google.com/spreadsheets/d/1V6YHzblaDph01sFDI8YK_fP0H7sVebHQT
 
 gs = requests.get(url).text.encode("utf-8").splitlines()
 
-gs = [str(x, 'utf-8').strip().split("\t") for x in gs]
-gs = [x for x in gs if x[2]]
+gs = [str(x).strip().split("\t") for x in gs]
+gs = [x for x in gs if x[2] and len(x) > 4]
 
 gs = [(x[0], x[2], x[3]) for x in gs]
 WI_ISOTYPE = {}
