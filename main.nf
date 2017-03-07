@@ -108,7 +108,7 @@ process coverage_fq {
 
 process coverage_fq_merge {
 
-    publishDir analysis_dir + "/fq", mode: 'copy'
+    publishDir analysis_dir + "/fq", mode: 'copy', overwrite: true
 
     input:
         file fq_set from fq_coverage.toSortedList()
@@ -145,7 +145,7 @@ process fq_idx_stats {
 
 process fq_combine_idx_stats {
 
-    publishDir analysis_dir + "/fq", mode: 'copy'
+    publishDir analysis_dir + "/fq", mode: 'copy', overwrite: true
 
     input:
         file("?.stat.txt") from fq_idxstats_set.toSortedList()
@@ -181,7 +181,7 @@ process fq_bam_stats {
 
 process combine_fq_bam_stats {
 
-    publishDir analysis_dir + "/fq", mode: 'copy'
+    publishDir analysis_dir + "/fq", mode: 'copy', overwrite: true
 
     input:
         file("*.stat.txt") from fq_bam_stat_files.toSortedList()
@@ -255,7 +255,7 @@ process SM_idx_stats {
 
 process SM_combine_idx_stats {
 
-    publishDir analysis_dir + "/SM", mode: 'copy'
+    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
 
     input:
         file("*.stat.txt") from bam_idxstats_set.toSortedList()
@@ -292,7 +292,7 @@ process SM_bam_stats {
 
 process combine_SM_bam_stats {
 
-    publishDir analysis_dir + "/SM", mode: 'copy'
+    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
 
     input:
         file("?.stat.txt") from SM_bam_stat_files.toSortedList()
@@ -310,7 +310,7 @@ process combine_SM_bam_stats {
 
 process format_duplicates {
 
-    publishDir analysis_dir + "/duplicates", mode: 'copy'
+    publishDir analysis_dir + "/duplicates", mode: 'copy', overwrite: true
 
     input:
         val duplicates_set from duplicates_file.toSortedList()
@@ -356,7 +356,7 @@ process coverage_SM {
 
 process coverage_SM_merge {
 
-    publishDir analysis_dir + "/SM", mode: 'copy'
+    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
 
     input:
         val sm_set from SM_coverage.toSortedList()
@@ -376,7 +376,7 @@ process coverage_SM_merge {
 
 process coverage_bins_merge {
 
-    publishDir analysis_dir + "/SM", mode: 'copy'
+    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
 
     input:
         val mb from SM_1mb_coverage.toSortedList()
@@ -384,17 +384,12 @@ process coverage_bins_merge {
         val kb_10 from SM_10kb_coverage.toSortedList()
 
     output:
-        file("SM_coverage.mb.tsv")
+        file("SM_coverage.mb.tsv.gz")
 
     """
         echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.mb.tsv
         cat ${mb.join(" ")} >> SM_coverage.mb.tsv
-
-        echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.kb_100.tsv
-        cat ${kb_100.join(" ")} >> SM_coverage.kb_100.tsv
-
-        echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.kb_10.tsv
-        cat ${kb_10.join(" ")} >> SM_coverage.kb_10.tsv
+        gzip SM_coverage.mb.tsv
     """
 }
 
@@ -429,81 +424,13 @@ process call_variants_individual {
     """
 }
 
-
-process fq_concordance {
-
-    cpus variant_cores
-
-    tag { SM }
-
-    input:
-        set val(SM), file("input.bam"), file("input.bam.bai") from fq_concordance_bam
-
-    output:
-        file('out.tsv') into fq_concordance_out
-
-    """
-        # Split bam file into individual read groups; Ignore MtDNA
-        contigs="`samtools view -H input.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40 | grep -v 'MtDNA' | tr ' ' '\\n'`"
-        samtools split -f '%!.%.' input.bam
-        # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
-        bam_list="`ls -1 *.bam | grep -v 'input.bam'`"
-
-        ls -1 *.bam | grep -v 'input.bam' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools index {}"
-
-        # Generate a site list for the set of fastqs
-        rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
-        # Perform individual-level calling
-        for rg in \$rg_list; do
-            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {}.\${rg}.site_list.tsv"
-        done;
-        cat *.site_list.tsv  | sort --temporary-directory=${tmpdir} -k1,1 -k2,2n | uniq > site_list.srt.tsv
-        bgzip site_list.srt.tsv -c > site_list.srt.tsv.gz && tabix -s1 -b2 -e2 site_list.srt.tsv.gz
-        
-        # Call a union set of variants
-        for rg in \$rg_list; do
-            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O z > {}.\${rg}.vcf.gz"
-            order=`echo \${contigs} | tr ' ' '\\n' | awk -v rg=\${rg} '{ print \$1 "." rg ".vcf.gz" }'`
-            # Output variant sites
-            bcftools concat \${order} -O v | \\
-            vk geno het-polarization - | \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "QUAL >= 10 || FORMAT/GT == '0/0'" |  \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "FORMAT/DP > 3" | \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "INFO/MQ > ${mq}" | \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
-            bcftools query -f '%CHROM\\t%POS[\\t%GT\\t${SM}\\n]' | grep -v '0/1' | awk -v rg=\${rg} '{ print \$0 "\\t" rg }' > \${rg}.rg_gt.tsv
-        done;
-        cat *.rg_gt.tsv > rg_gt.tsv
-        touch out.tsv
-        Rscript --vanilla ${fq_concordance_script} 
-    """
-}
-
-process combine_fq_concordance {
-
-    publishDir analysis_dir + "/concordance", mode: 'copy'
-
-    input:
-        file("out*.tsv") from fq_concordance_out.toSortedList()
-
-    output:
-        file("fq_concordance.tsv")
-
-    """
-        cat <(echo 'a\tb\tconcordant_sites\ttotal_sites\tconcordance\tSM') out*.tsv > fq_concordance.tsv
-    """
-
-
-}
-
-
 /*
     Merge individual sites
 */
 
 process merge_variant_list {
 
-    publishDir analysis_dir + "/sitelist", mode: 'copy'
+    publishDir analysis_dir + "/sitelist", mode: 'copy', overwrite: true
     
     input:
         val sites from individual_sites.toSortedList()
@@ -729,12 +656,80 @@ process generate_isotype_groups {
 
 }
 
+
+
+process fq_concordance {
+
+    cpus variant_cores
+
+    tag { SM }
+
+    input:
+        set val(SM), file("input.bam"), file("input.bam.bai") from fq_concordance_bam
+
+    output:
+        file('out.tsv') into fq_concordance_out
+
+    """
+        # Split bam file into individual read groups; Ignore MtDNA
+        contigs="`samtools view -H input.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40 | grep -v 'MtDNA' | tr ' ' '\\n'`"
+        samtools split -f '%!.%.' input.bam
+        # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
+        bam_list="`ls -1 *.bam | grep -v 'input.bam'`"
+
+        ls -1 *.bam | grep -v 'input.bam' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools index {}"
+
+        # Generate a site list for the set of fastqs
+        rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
+        # Perform individual-level calling
+        for rg in \$rg_list; do
+            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {}.\${rg}.site_list.tsv"
+        done;
+        cat *.site_list.tsv  | sort --temporary-directory=${tmpdir} -k1,1 -k2,2n | uniq > site_list.srt.tsv
+        bgzip site_list.srt.tsv -c > site_list.srt.tsv.gz && tabix -s1 -b2 -e2 site_list.srt.tsv.gz
+        
+        # Call a union set of variants
+        for rg in \$rg_list; do
+            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O z > {}.\${rg}.vcf.gz"
+            order=`echo \${contigs} | tr ' ' '\\n' | awk -v rg=\${rg} '{ print \$1 "." rg ".vcf.gz" }'`
+            # Output variant sites
+            bcftools concat \${order} -O v | \\
+            vk geno het-polarization - | \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "QUAL >= 10 || FORMAT/GT == '0/0'" |  \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "FORMAT/DP > 3" | \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "INFO/MQ > ${mq}" | \\
+            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
+            bcftools query -f '%CHROM\\t%POS[\\t%GT\\t${SM}\\n]' | grep -v '0/1' | awk -v rg=\${rg} '{ print \$0 "\\t" rg }' > \${rg}.rg_gt.tsv
+        done;
+        cat *.rg_gt.tsv > rg_gt.tsv
+        touch out.tsv
+        Rscript --vanilla ${fq_concordance_script} 
+    """
+}
+
+process combine_fq_concordance {
+
+    publishDir analysis_dir + "/concordance", mode: 'copy', overwrite: true
+
+    input:
+        file("out*.tsv") from fq_concordance_out.toSortedList()
+
+    output:
+        file("fq_concordance.tsv")
+
+    """
+        cat <(echo 'a\tb\tconcordant_sites\ttotal_sites\tconcordance\tSM') out*.tsv > fq_concordance.tsv
+    """
+
+
+}
+
 pairwise_groups_input = pairwise_groups.splitText( by:1 )
 
 // Look for diverged regions among isotypes.
 process pairwise_variant_compare {
 
-    publishDir analysis_dir + "/pairwise", mode: 'copy'
+    publishDir analysis_dir + "/pairwise", mode: 'copy', overwrite: true
 
     tag { pair }
 
@@ -744,7 +739,6 @@ process pairwise_variant_compare {
 
     output:
         file("${group}.${isotype}.${pair.replace(",","_")}.png")
-        file("${group}.${isotype}.${pair.replace(",","_")}.tsv")
 
     script:
         pair_group = pair_group.trim().split("\t")
@@ -753,8 +747,8 @@ process pairwise_variant_compare {
         isotype = pair_group[2]
 
     """
-        bcftools view -s ${pair} concordance.vcf.gz | grep '0/0' | grep '1/1' | cut -f 1,2 > out.tsv
-        Rscript --vanilla ${plot_pairwise_script}
+        bcftools query -f '%CHROM\t%POS[\t%GT]\n' -s ${pair} concordance.vcf.gz > out.tsv
+        Rscript --vanilla ${plot_pairwise_script} 
         mv out.png ${group}.${isotype}.${pair.replace(",","_")}.png
         mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
     """
@@ -769,7 +763,7 @@ filtered_vcf_phylo_contig = filtered_vcf_phylo.spread(["I", "II", "III", "IV", "
 
 process phylo_analysis {
 
-    publishDir analysis_dir + "/phylo", mode: "copy"
+    publishDir analysis_dir + "/phylo", mode: "copy", overwrite: true
 
     tag { contig }
 
@@ -810,4 +804,6 @@ process plot_trees {
     """
 
 }
+
+
 
