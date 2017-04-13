@@ -541,7 +541,7 @@ process filter_union_vcf {
     output:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into filtered_vcf
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into filtered_vcf_pairwise
-
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") into het_check_vcf
     """
         bcftools view merged.raw.vcf.gz | \\
         vk filter ALT --max=0.99 - | \\
@@ -786,5 +786,19 @@ process plot_trees {
 
 }
 
+process heterozygosity_check {
 
+    publishDir analysis_dir + "/SM", mode: "copy"
+
+    input:
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from het_check_vcf
+
+    output:
+        file("heterozygosity.tsv")
+
+    """
+        bcftools query -l concordance.vcf.gz | xargs --verbose -I {} -P ${cores} sh -c "bcftools query -f '[%SAMPLE\t%GT\n]' --samples={} concordance.vcf.gz | grep '0/1' | uniq -c >> heterozygosity.tsv"
+    """
+
+}
 
