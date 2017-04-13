@@ -26,38 +26,19 @@ dv_dp=0.5
 println "Running Concordance on Wild Isolates"
 println "Using Reference: ${genome}" 
 
-// Construct strain and isotype lists
-import groovy.json.JsonSlurper
-
-def strain_set = []
-
-if (test == 'true') {
-    strain_json = "strain_set_test.json"
-} else {
-    strain_json = "strain_set.json"
-}
-
-// Strain
-def strainFile = new File(strain_json)
-def strainJSON = new JsonSlurper().parseText(strainFile.text)
-strain_set_file = Channel.fromPath(strain_json)
-
-strainJSON.each { SM, RG ->
-    RG.each { k, v ->
-        strain_set << [SM, k, v[0], v[1], v[2]]
-    }
-}
+strainFile = new File("SM_sample_sheet.tsv")
+fqs = Channel.from(strainFile.collect { it.tokenize( '\t' ) })
 
 process setup_dirs {
 
     executor 'local'
 
     input:
-        file strain_set_file
+        file strainFile
 
     """
         mkdir -p ${analysis_dir}
-        cp ${strain_set_file} ${analysis_dir}/strain_set.json
+        cp ${strainFile} ${analysis_dir}/
     """
 }
 
@@ -68,20 +49,20 @@ process perform_alignment {
 
     cpus cores
 
-    tag { fq_pair_id }
+    tag { ID }
 
     input:
-        set SM, RG, fq1, fq2, fq_pair_id from strain_set
+        set SM, ID, LB, fq1, fq2, seq_folder from fqs
     output:
-        set val(fq_pair_id), file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") into fq_bam_set
-        set val(SM), file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") into SM_aligned_bams
+        set val(ID), file("${ID}.bam"), file("${ID}.bam.bai") into fq_bam_set
+        set val(SM), file("${ID}.bam"), file("${ID}.bam.bai") into SM_aligned_bams
 
     
     """
-        bwa mem -t ${cores} -R '${RG}' ${reference} ${fq1} ${fq2} | \\
+        bwa mem -t ${cores} -R '@RG\tID:${ID}\tLB:${LB}\tSM:${SM}' ${reference} ${fq1} ${fq2} | \\
         sambamba view --nthreads=${cores} --sam-input --format=bam --with-header /dev/stdin | \\
-        sambamba sort --nthreads=${cores} --show-progress --tmpdir=${tmpdir} --out=${fq_pair_id}.bam /dev/stdin
-        sambamba index --nthreads=${cores} ${fq_pair_id}.bam
+        sambamba sort --nthreads=${cores} --show-progress --tmpdir=${tmpdir} --out=${ID}.bam /dev/stdin
+        sambamba index --nthreads=${cores} ${ID}.bam
     """
 }
 
@@ -92,16 +73,16 @@ fq_bam_set.into { fq_cov_bam; fq_stats_bam; fq_idx_stats_bam }
 */
 process coverage_fq {
 
-    tag { fq_pair_id }
+    tag { ID }
 
     input:
-        set val(fq_pair_id), file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") from fq_cov_bam
+        set val(ID), file("${ID}.bam"), file("${ID}.bam.bai") from fq_cov_bam
     output:
-        file("${fq_pair_id}.coverage.tsv") into fq_coverage
+        file("${ID}.coverage.tsv") into fq_coverage
 
 
     """
-        bam coverage ${fq_pair_id}.bam > ${fq_pair_id}.coverage.tsv
+        bam coverage ${ID}.bam > ${ID}.coverage.tsv
     """
 }
 
@@ -131,15 +112,15 @@ process coverage_fq_merge {
 
 process fq_idx_stats {
     
-    tag { fq_pair_id }
+    tag { ID }
 
     input:
-        set val(fq_pair_id), file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") from fq_idx_stats_bam
+        set val(ID), file("${ID}.bam"), file("${ID}.bam.bai") from fq_idx_stats_bam
     output:
         file fq_idxstats into fq_idxstats_set
 
     """
-        samtools idxstats ${fq_pair_id}.bam | awk '{ print "${fq_pair_id}\\t" \$0 }' > fq_idxstats
+        samtools idxstats ${ID}.bam | awk '{ print "${ID}\\t" \$0 }' > fq_idxstats
     """
 }
 
@@ -166,16 +147,16 @@ process fq_combine_idx_stats {
 
 process fq_bam_stats {
 
-    tag { fq_pair_id }
+    tag { ID }
 
     input:
-        set val(fq_pair_id), file("${fq_pair_id}.bam"), file("${fq_pair_id}.bam.bai") from fq_stats_bam
+        set val(ID), file("${ID}.bam"), file("${ID}.bam.bai") from fq_stats_bam
 
     output:
         file 'bam_stat' into fq_bam_stat_files
 
     """
-        cat <(samtools stats ${fq_pair_id}.bam | grep ^SN | cut -f 2- | awk '{ print "${fq_pair_id}\t" \$0 }' | sed 's/://g') > bam_stat
+        cat <(samtools stats ${ID}.bam | grep ^SN | cut -f 2- | awk '{ print "${ID}\t" \$0 }' | sed 's/://g') > bam_stat
     """
 }
 
@@ -190,7 +171,7 @@ process combine_fq_bam_stats {
         file("fq_bam_stats.tsv")
 
     """
-        echo -e "fq_pair_id\\tvariable\\tvalue\\tcomment" > fq_bam_stats.tsv
+        echo -e "ID\\tvariable\\tvalue\\tcomment" > fq_bam_stats.tsv
         cat *.stat.txt >> fq_bam_stats.tsv
     """
 }
@@ -301,7 +282,7 @@ process combine_SM_bam_stats {
         file("SM_bam_stats.tsv")
 
     """
-        echo -e "fq_pair_id\\tvariable\\tvalue\\tcomment" > SM_bam_stats.tsv
+        echo -e "ID\\tvariable\\tvalue\\tcomment" > SM_bam_stats.tsv
         cat *.stat.txt | sort >> SM_bam_stats.tsv
     """
 }
