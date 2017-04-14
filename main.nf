@@ -213,8 +213,7 @@ process merge_bam {
     """
 }
 
-bam_set.into { merged_bams_for_coverage; merged_bams_individual; merged_bams_union; bams_idxstats; bams_stats; fq_concordance_bam  }
-
+bam_set.into { merged_bams_for_coverage; merged_bams_individual; merged_bams_union; bams_idxstats; bams_stats; fq_concordance_bam;  }
 
 /*
     SM_idx_stats
@@ -417,7 +416,7 @@ process merge_variant_list {
         val sites from individual_sites.toSortedList()
 
     output:
-        file("sitelist.tsv.gz") into gz_sitelist
+        file('sitelist.tsv.gz') into gz_sitelist
         file("sitelist.tsv") into sitelist
         file("sitelist.count.txt")
 
@@ -434,9 +433,10 @@ process merge_variant_list {
 /* 
     Call variants using the merged site list
 */
+union_vcf_channel = merged_bams_union.spread([gz_sitelist])
 
+union_vcf_channel.into { union_vcf_channel_use; union_vcf_channel_print }
 
-union_vcf_channel = merged_bams_union.spread(gz_sitelist)
 
 
 process call_variants_union {
@@ -444,7 +444,7 @@ process call_variants_union {
     tag { SM }
 
     input:
-        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai"), file('sitelist.tsv.gz') from union_vcf_channel
+        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai"), file('sitelist.tsv.gz') from union_vcf_channel_use
 
     output:
         file("${SM}.union.vcf.gz") into union_vcf_set
