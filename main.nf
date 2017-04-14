@@ -34,11 +34,11 @@ process setup_dirs {
     executor 'local'
 
     input:
-        file strainFile
+        file 'SM_sample_sheet.tsv' from Channel.fromPath("SM_sample_sheet.tsv")
 
     """
         mkdir -p ${analysis_dir}
-        cp ${strainFile} ${analysis_dir}/
+        cp SM_sample_sheet.tsv ${analysis_dir}/SM_sample_sheet.tsv
     """
 }
 
@@ -417,8 +417,7 @@ process merge_variant_list {
         val sites from individual_sites.toSortedList()
 
     output:
-        set file("sitelist.tsv.gz"), file("sitelist.tsv.gz.tbi") into gz_sitelist
-        set file("sitelist.tsv.gz"), file("sitelist.tsv.gz.tbi") into fq_gz_sitelist
+        file("sitelist.tsv.gz") into gz_sitelist
         file("sitelist.tsv") into sitelist
         file("sitelist.count.txt")
 
@@ -445,14 +444,15 @@ process call_variants_union {
     tag { SM }
 
     input:
-        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai"), file('sitelist.tsv.gz'), file('sitelist.tsv.gz.tbi') from union_vcf_channel
+        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai"), file('sitelist.tsv.gz') from union_vcf_channel
 
     output:
         file("${SM}.union.vcf.gz") into union_vcf_set
 
     """
         contigs="`samtools view -H ${SM}.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40`"
-        echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,INFO/AD,SP --fasta-ref ${reference} ${SM}.bam | bcftools call -T sitelist.tsv.gz --skip-variants indels --multiallelic-caller -O z  -  > ${SM}.{}.union.vcf.gz"
+        sites=`readlink -f sitelist.tsv.gz`
+        echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,INFO/AD,SP --fasta-ref ${reference} ${SM}.bam | bcftools call -T \${sites} --skip-variants indels --multiallelic-caller -O z  -  > ${SM}.{}.union.vcf.gz"
         order=`echo \${contigs} | tr ' ' '\\n' | awk '{ print "${SM}." \$1 ".union.vcf.gz" }'`
 
         # Output variant sites
