@@ -433,9 +433,6 @@ process merge_variant_list {
 /* 
     Call variants using the merged site list
 */
-union_vcf_channel = merged_bams_union.spread([gz_sitelist])
-
-union_vcf_channel.into { union_vcf_channel_use; union_vcf_channel_print }
 
 
 
@@ -444,7 +441,8 @@ process call_variants_union {
     tag { SM }
 
     input:
-        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai"), file('sitelist.tsv.gz') from union_vcf_channel_use
+        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai") from merged_bams_union
+        file 'sitelist.tsv.gz' from gz_sitelist
 
     output:
         file("${SM}.union.vcf.gz") into union_vcf_set
@@ -502,7 +500,7 @@ process merge_union_vcf_chromosome {
         file("${chrom}.merged.raw.vcf.gz") into raw_vcf
 
     """
-        bcftools merge --threads 10 --regions ${chrom} -O z -m all --file-list ${union_vcfs} > ${chrom}.merged.raw.vcf.gz
+        bcftools merge --regions ${chrom} -O z -m all --file-list ${union_vcfs} > ${chrom}.merged.raw.vcf.gz
         bcftools index ${chrom}.merged.raw.vcf.gz
     """
 }
