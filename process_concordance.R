@@ -14,6 +14,8 @@ coverage_20 <- (readr::read_tsv("SM_coverage.tsv") %>%
 
 WI <- readr::read_tsv("https://docs.google.com/spreadsheets/d/1V6YHzblaDph01sFDI8YK_fP0H7sVebHQTXypGdiQIjI/pub?output=tsv") 
 
+WI %>% readr:write_tsv("WI_metadata.tsv:")
+
 existing_WI <- WI %>%
   dplyr::select(strain, isotype, latitude, longitude) %>%
   dplyr::filter(strain %in% coverage_20) %>%

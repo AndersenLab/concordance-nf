@@ -611,6 +611,7 @@ process process_concordance_results {
         file("xconcordance.png")
         file("isotype_groups.tsv") into isotype_groups
         file("isotype_count.txt")
+        file("WI_metadata.tsv")
 
     """
     # Run concordance analysis
