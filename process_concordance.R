@@ -28,7 +28,8 @@ cutoff <- 0.999
 gtcheck <- readr::read_tsv("gtcheck.tsv") %>%
   dplyr::filter((i %in% coverage_20) & (j %in% coverage_20)) %>%
   dplyr::mutate(concordance = 1-(discordance/sites)) %>%
-  dplyr::mutate(isotype = concordance > cutoff) 
+  dplyr::mutate(isotype = concordance > cutoff) %>%
+  dplyr:filter(!(i %in% c("LSJ1", "JU2250")) & !(j %in% c("LSJ1", "JU2250")))
 
 # Generate strains that do not group with any other strains (single strains)
 single_strains <- gtcheck %>%
@@ -41,7 +42,9 @@ single_strains <- gtcheck %>%
   dplyr::filter(single_strain)
 
 # Add LSJ1
-single_strains <- dplyr::bind_rows(list(strain = "LSJ1", single_strain = T), single_strains)
+single_strains <- dplyr::bind_rows(list(strain = "LSJ1", single_strain = T),
+                                   list(strain = "JU2250", single_strain = T),
+                                   single_strains)
 
 single_strains <- as.data.frame(list(i = single_strains$strain,
                                      j = single_strains$strain,
@@ -65,6 +68,8 @@ isotype_groups <- stack_list(unique(lapply(strain_list, function(x) {
 }))) %>%
   dplyr::rename(strain = values, group = ind) %>%
   dplyr::mutate(group = ifelse(strain == "LSJ1", 0, group)) %>%
+  dplyr::mutate(group = ifelse(strain == "JU2250", -1, group)) %>%
+  dplyr::distinct() %>% 
   dplyr::group_by(group) %>%
   tidyr::nest(strain) %>%
   dplyr::distinct(data, .keep_all = T) %>%
