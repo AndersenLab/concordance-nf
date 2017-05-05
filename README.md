@@ -3,73 +3,8 @@
 Perform Fastq-Profiling in the current working directory.
 
 ### Usage
-
-The `concordance-nf` pipeline takes as input a JSON file. The JSON file is organized as a hierarchy as follows:
-
 ```
-{
-    "<strain_name>": {
-        "@RG\tID:<sample_id>LB:<sequencing_library>SM:<strain_name>": [
-            "/path/to/fq1.fq.gz",
-            "/path/to/fq2.fq.gz",
-            "<sample_id>"
-        ]
-}
-```
-
-The following variables are defined above:
-
-* `<sample_id>` - A unique id for the sample. This should be unique for every sequencing run of a given sample.
-* `<sequencing_library>` - The sequencing library for a sample. In general, the Nextera Barcodes used can be substituted for the sequencing library.
-* `<sample_name>` - `SM` stands for sample, but here we are using it to reflect the strain name.
-
-A complete example is below:
-```
-{
-  "AB1": {
-    "@RG\tID:original_wi_seq____BGI1-RET2-AB1-trim-\tLB:RET2\tSM:AB1": [
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/BGI1-RET2-AB1-trim-1P.fq.gz",
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/BGI1-RET2-AB1-trim-2P.fq.gz",
-      "BGI1-RET2-AB1-trim-"
-    ],
-    "@RG\tID:original_wi_seq____BGI2-RET2-AB1-trim-\tLB:RET2\tSM:AB1": [
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/BGI2-RET2-AB1-trim-1P.fq.gz",
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/BGI2-RET2-AB1-trim-2P.fq.gz",
-      "BGI2-RET2-AB1-trim-"
-    ],
-    "@RG\tID:original_wi_seq____BGI3-RET2b-AB1-trim-\tLB:RET2b\tSM:AB1": [
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/BGI3-RET2b-AB1-trim-1P.fq.gz",
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/BGI3-RET2b-AB1-trim-2P.fq.gz",
-      "BGI3-RET2b-AB1-trim-"
-    ],
-    "@RG\tID:original_wi_seq____MMP-ML_2-AB1-trim-\tLB:ML_2\tSM:AB1": [
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/MMP-ML_2-AB1-trim-1P.fq.gz",
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/MMP-ML_2-AB1-trim-2P.fq.gz",
-      "MMP-ML_2-AB1-trim-"
-    ]
-  },
-  "AB2": {
-    "@RG\tID:original_wi_seq____Rockman-R999.1-AB2-trim-\tLB:R999.1\tSM:AB2": [
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/R999.1-AB2-trim-1P.fq.gz",
-      "/Users/dancook/Documents/quest/concordance-nf/test_data/R999.1-AB2-trim-2P.fq.gz",
-      "Rockman-R999.1-AB2-trim-"
-    ]
-  }
-```
-
-### Running the pipeline
-
-The pipeline comes packaged with test data. When the workflow is run, you  must specify whether you are using test data or real data. 
-
-__`-e.test=true`__ - Uses `strain_set_test.json`
-
-__`-e.test=false`__ - Uses `strain_set.json`
-
-
-I recommend running the command as show, to enable caching.
-
-```
-nextflow run main.nf -e.test=false -resume
+nextflow run main.nf -resume
 ```
 
 ### Configuration
