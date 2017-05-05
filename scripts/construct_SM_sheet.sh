@@ -165,5 +165,14 @@ awk  -F  "-" -v prefix=${prefix} -v seq_folder=${seq_folder} '{
     print SM "\t" ID "\t" LB "\t" prefix "/" fq1 "\t" prefix "/" fq2 "\t" seq_folder;
 }' >> ${fq_sheet}
 
+#===========================================================#
+# MAF-JU1249-20170425 - Single Strain from Marie Anne Felix #
+#===========================================================#
+
+seq_folder=MAF-JU1249-20170425 
+prefix=/projects/b1059/data/fastq/WI/dna/processed/${seq_folder}
+
+echo -e "JU1249\tJU1259MAF\tJU1249MAF\t${prefix}/JU1249_1P.fq.gz\t${prefix}/JU1249_2P.fq.gz\t${seq_folder}" >> ${fq_sheet}
+
 
 cat ${fq_sheet} | sort > ../SM_sample_sheet.tsv

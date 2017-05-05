@@ -185,7 +185,7 @@ process merge_bam {
 
     cpus cores
 
-    publishDir SM_alignments_dir + "/WI/strain", mode: 'copy', pattern: '*.bam*'
+    publishDir SM_alignments_dir, mode: 'copy', pattern: '*.bam*'
 
     tag { SM }
 
@@ -213,7 +213,15 @@ process merge_bam {
     """
 }
 
-bam_set.into { merged_bams_for_coverage; merged_bams_individual; merged_bams_union; bams_idxstats; bams_stats; fq_concordance_bam;  }
+bam_set.into { 
+               merged_bams_for_coverage;
+               merged_bams_individual;
+               merged_bams_union;
+               bams_idxstats;
+               bams_stats;
+               fq_concordance_bam
+             }
+
 
 /*
     SM_idx_stats

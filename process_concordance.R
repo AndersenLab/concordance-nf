@@ -29,7 +29,7 @@ gtcheck <- readr::read_tsv("gtcheck.tsv") %>%
   dplyr::filter((i %in% coverage_20) & (j %in% coverage_20)) %>%
   dplyr::mutate(concordance = 1-(discordance/sites)) %>%
   dplyr::mutate(isotype = concordance > cutoff) %>%
-  dplyr:filter(!(i %in% c("LSJ1", "JU2250")) & !(j %in% c("LSJ1", "JU2250")))
+  dplyr::filter(!(i %in% c("LSJ1", "JU2250")) & !(j %in% c("LSJ1", "JU2250")))
 
 # Generate strains that do not group with any other strains (single strains)
 single_strains <- gtcheck %>%
