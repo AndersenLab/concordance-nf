@@ -174,5 +174,24 @@ prefix=/projects/b1059/data/fastq/WI/dna/processed/${seq_folder}
 
 echo -e "JU1249\tJU1259MAF\tJU1249MAF\t${prefix}/JU1249_1P.fq.gz\t${prefix}/JU1249_2P.fq.gz\t${seq_folder}" >> ${fq_sheet}
 
+#=====================#
+# 170511-NU-HiSeq4000 #
+#=====================#
+
+seq_folder=170511-NU-HiSeq4000
+prefix=/projects/b1059/data/fastq/WI/dna/processed/${seq_folder}
+
+ls -1 ${prefix}/*1P.fq.gz |\
+xargs -n1 basename |\
+awk  -F  "_" -v prefix=${prefix} -v seq_folder=${seq_folder} '{
+    fq1 = $0;  
+    fq2 = $0;
+    gsub("1P.fq.gz", "2P.fq.gz", fq2);
+    LB = $2;
+    ID = $1 "-" $2 "-" $3;
+    SM=$1;
+    print SM "\t" ID "\tL1-HiSeq\t" prefix "/" fq1 "\t" prefix "/" fq2 "\t" seq_folder;
+}' >> ${fq_sheet}
+
 
 cat ${fq_sheet} | sort > ../SM_sample_sheet.tsv
