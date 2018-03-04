@@ -1,11 +1,37 @@
 #!/usr/bin/env nextflow
-tmpdir = config.tmpdir
-reference = config.reference
-cores = config.alignment_cores
-variant_cores = config.variant_cores
-genome = config.genome
-SM_alignments_dir = config.SM_alignments_dir
-analysis_dir = config.analysis_dir
+/*
+ * Authors:
+ * - Daniel Cook <danielecook@gmail.com>
+ *
+ */
+
+
+/*
+    Globals
+*/
+
+// Define contigs here!
+CONTIG_LIST = ["I", "II", "III", "IV", "V", "X", "MtDNA"]
+contigs = Channel.from(CONTIG_LIST)
+
+/*
+    Params
+*/
+
+date = new Date().format( 'yyyyMMdd' )
+params.out = "concordance-${date}"
+params.debug = false
+params.cores = 4
+params.tmpdir = "tmp/"
+params.email = ""
+params.alignments = "bam"
+File reference = new File("${params.reference}")
+if (params.reference != "(required)") {
+   reference_handle = reference.getAbsolutePath();
+} else {
+   reference_handle = "(required)"
+}
+
 
 // Define contigs here!
 contig_list = ["I", "II", "III", "IV", "V", "X", "MtDNA"]
@@ -15,26 +41,75 @@ fq_concordance_script = file("fq_concordance.R")
 process_concordance = file("process_concordance.R")
 plot_pairwise_script = file("plot_pairwise.R")
 
+// Debug
+if (params.debug == true) {
+    println """
+
+        *** Using debug mode ***
+
+    """
+    params.fqs = "${workflow.projectDir}/test_data/SM_sample_sheet.tsv"
+    params.bamdir = "${params.out}/bam"
+    File fq_file = new File(params.fqs);
+    params.fq_file_prefix = "${workflow.projectDir}/test_data"
+
+} else {
+    // The SM sheet that is used is located in the root of the git repo
+    params.bamdir = "(required)"
+    params.fq_file_prefix = null;
+    params.fqs = "SM_sample_sheet.tsv"
+}
+File fq_file = new File(params.fqs);
+
 /*
     Filtering configuration
 */
+
 min_depth=3
 qual=30
 mq=40
 dv_dp=0.5
 
-println "Running Concordance on Wild Isolates"
-println "Using Reference: ${genome}" 
 
-strainFile = new File("SM_sample_sheet.tsv")
+param_summary = '''
+
+┌─┐┌─┐┌┐┌┌─┐┌─┐┬─┐┌┬┐┌─┐┌┐┌┌─┐┌─┐  ┌┐┌┌─┐
+│  │ │││││  │ │├┬┘ ││├─┤││││  ├┤───│││├┤ 
+└─┘└─┘┘└┘└─┘└─┘┴└──┴┘┴ ┴┘└┘└─┘└─┘  ┘└┘└  
+                                                         
+''' + """
+
+    parameters              description                    Set/Default
+    ==========              ===========                    =======
+
+    --debug                 Set to 'true' to test          ${params.debug}
+    --cores                 Regular job cores              ${params.cores}
+    --out                   Directory to output results    ${params.out}
+    --fqs                   fastq file (see help)          ${params.fqs}
+    --reference             Reference Genome               ${params.reference}
+    --annotation_reference  SnpEff annotation              ${params.annotation_reference}
+    --bamdir                Location for bams              ${params.bamdir}
+    --tmpdir                A temporary directory          ${params.tmpdir}
+    --email                 Email to be sent results       ${params.email}
+
+    HELP: http://andersenlab.org/dry-guide/pipeline-concordance/
+
+"""
+
+strainFile = new File(params.fqs)
 fqs = Channel.from(strainFile.collect { it.tokenize( '\t' ) })
 
 process setup_dirs {
 
     executor 'local'
 
+    publishDir: params.out
+
     input:
-        file 'SM_sample_sheet.tsv' from Channel.fromPath("SM_sample_sheet.tsv")
+        file 'SM_sample_sheet.tsv' from Channel.fromPath(params.fqs)
+
+    output:
+        file("SM_sample_sheet.tsv")
 
     """
         mkdir -p ${analysis_dir}
@@ -47,7 +122,7 @@ process setup_dirs {
 */
 process perform_alignment {
 
-    cpus cores
+    cpus params.cores
 
     tag { ID }
 
@@ -59,10 +134,10 @@ process perform_alignment {
 
     
     """
-        bwa mem -t ${cores} -R '@RG\tID:${ID}\tLB:${LB}\tSM:${SM}' ${reference} ${fq1} ${fq2} | \\
-        sambamba view --nthreads=${cores} --sam-input --format=bam --with-header /dev/stdin | \\
-        sambamba sort --nthreads=${cores} --show-progress --tmpdir=${tmpdir} --out=${ID}.bam /dev/stdin
-        sambamba index --nthreads=${cores} ${ID}.bam
+        bwa mem -t ${params.cores} -R '@RG\tID:${ID}\tLB:${LB}\tSM:${SM}' ${reference} ${fq1} ${fq2} | \\
+        sambamba view --nthreads=${params.cores} --sam-input --format=bam --with-header /dev/stdin | \\
+        sambamba sort --nthreads=${params.cores} --show-progress --tmpdir=${params.tmpdir} --out=${ID}.bam /dev/stdin
+        sambamba index --nthreads=${params.cores} ${ID}.bam
     """
 }
 
