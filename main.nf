@@ -5,14 +5,13 @@
  *
  */
 
-
 /*
     Globals
 */
 
 // Define contigs here!
 CONTIG_LIST = ["I", "II", "III", "IV", "V", "X", "MtDNA"]
-contigs = Channel.from(CONTIG_LIST)
+contig_list = Channel.from(CONTIG_LIST)
 
 /*
     Params
@@ -32,14 +31,7 @@ if (params.reference != "(required)") {
    reference_handle = "(required)"
 }
 
-
-// Define contigs here!
-contig_list = ["I", "II", "III", "IV", "V", "X", "MtDNA"]
-contigs = Channel.from(contig_list)
-
 fq_concordance_script = file("fq_concordance.R")
-process_concordance = file("process_concordance.R")
-plot_pairwise_script = file("plot_pairwise.R")
 
 // Debug
 if (params.debug == true) {
@@ -48,18 +40,18 @@ if (params.debug == true) {
         *** Using debug mode ***
 
     """
-    params.fqs = "${workflow.projectDir}/test_data/SM_sample_sheet.tsv"
+    params.fq_file = "${workflow.projectDir}/test_data/SM_sample_sheet.tsv"
     params.bamdir = "${params.out}/bam"
-    File fq_file = new File(params.fqs);
+    File fq_file = new File(params.fq_file);
     params.fq_file_prefix = "${workflow.projectDir}/test_data"
 
 } else {
     // The SM sheet that is used is located in the root of the git repo
     params.bamdir = "(required)"
     params.fq_file_prefix = null;
-    params.fqs = "SM_sample_sheet.tsv"
+    params.fq_file = "SM_sample_sheet.tsv"
 }
-File fq_file = new File(params.fqs);
+File fq_file = new File(params.fq_file);
 
 /*
     Filtering configuration
@@ -70,6 +62,9 @@ qual=30
 mq=40
 dv_dp=0.5
 
+/*
+    UX
+*/
 
 param_summary = '''
 
@@ -85,9 +80,9 @@ param_summary = '''
     --debug                 Set to 'true' to test          ${params.debug}
     --cores                 Regular job cores              ${params.cores}
     --out                   Directory to output results    ${params.out}
-    --fqs                   fastq file (see help)          ${params.fqs}
+    --fq_file               fastq file (see help)          ${params.fq_file}
+    --fq_file_prefix        fastq file (see help)          ${params.fq_file_prefix}
     --reference             Reference Genome               ${params.reference}
-    --annotation_reference  SnpEff annotation              ${params.annotation_reference}
     --bamdir                Location for bams              ${params.bamdir}
     --tmpdir                A temporary directory          ${params.tmpdir}
     --email                 Email to be sent results       ${params.email}
@@ -96,26 +91,69 @@ param_summary = '''
 
 """
 
-strainFile = new File(params.fqs)
-fqs = Channel.from(strainFile.collect { it.tokenize( '\t' ) })
+println param_summary
+
+if (params.reference == "(required)" || params.fq_file == "(required)") {
+
+    println """
+    The Set/Default column shows what the value is currently set to
+    or would be set to if it is not specified (it's default).
+    """
+    System.exit(1)
+}
+
+if (!reference.exists()) {
+    println """
+
+    Error: Reference does not exist
+
+    """
+    System.exit(1)
+}
+
+if (!fq_file.exists()) {
+    println """
+
+    Error: fastq sheet does not exist
+
+    """
+    System.exit(1)
+}
+
+/*
+    Fetch fastq files and additional information.
+*/
+if (params.fq_file_prefix) {
+fq_file_prefix = fq_file.getParentFile().getAbsolutePath();
+fqs = Channel.from(fq_file.collect { it.tokenize( '\t' ) })
+             .map { SM, ID, LB, fq1, fq2, seq_folder -> [SM, ID, LB, file("${fq_file_prefix}/${fq1}"), file("${fq_file_prefix}/${fq2}")] }
+println fqs
+} else {
+fqs = Channel.from(fq_file.collect { it.tokenize( '\t' ) })
+         .map { SM, ID, LB, fq1, fq2, seq_folder -> [SM, ID, LB, file("${fq1}"), file("${fq2}")] }
+}
 
 process setup_dirs {
 
     executor 'local'
 
-    publishDir: params.out
+    publishDir params.out, mode: 'copy'
 
     input:
-        file 'SM_sample_sheet.tsv' from Channel.fromPath(params.fqs)
+        file 'SM_sample_sheet.tsv' from Channel.fromPath(params.fq_file)
 
     output:
         file("SM_sample_sheet.tsv")
 
     """
-        mkdir -p ${analysis_dir}
-        cp SM_sample_sheet.tsv ${analysis_dir}/SM_sample_sheet.tsv
+        echo 'Great!'
     """
 }
+
+/*
+    Check that reference exists
+*/
+
 
 /*
     Fastq concordance
@@ -134,10 +172,14 @@ process perform_alignment {
 
     
     """
-        bwa mem -t ${params.cores} -R '@RG\tID:${ID}\tLB:${LB}\tSM:${SM}' ${reference} ${fq1} ${fq2} | \\
-        sambamba view --nthreads=${params.cores} --sam-input --format=bam --with-header /dev/stdin | \\
-        sambamba sort --nthreads=${params.cores} --show-progress --tmpdir=${params.tmpdir} --out=${ID}.bam /dev/stdin
-        sambamba index --nthreads=${params.cores} ${ID}.bam
+        bwa mem -t ${task.cpus} -R '@RG\\tID:${ID}\\tLB:${LB}\\tSM:${SM}' ${reference_handle} ${fq1} ${fq2} | \\
+        sambamba view --nthreads=${task.cpus} --show-progress --sam-input --format=bam --with-header /dev/stdin | \\
+        sambamba sort --nthreads=${task.cpus} --show-progress --tmpdir=${params.tmpdir} --out=${ID}.bam /dev/stdin
+        sambamba index --nthreads=${task.cpus} ${ID}.bam
+
+        if [[ ! \$(samtools view ${ID}.bam | head -n 10) ]]; then
+            exit 1;
+        fi
     """
 }
 
@@ -164,7 +206,7 @@ process coverage_fq {
 
 process coverage_fq_merge {
 
-    publishDir analysis_dir + "/fq", mode: 'copy', overwrite: true
+    publishDir params.out + "/fq", mode: 'copy', overwrite: true
 
     input:
         file fq_set from fq_coverage.toSortedList()
@@ -201,7 +243,7 @@ process fq_idx_stats {
 
 process fq_combine_idx_stats {
 
-    publishDir analysis_dir + "/fq", mode: 'copy', overwrite: true
+    publishDir params.out + "/fq", mode: 'copy', overwrite: true
 
     input:
         file("?.stat.txt") from fq_idxstats_set.toSortedList()
@@ -237,7 +279,7 @@ process fq_bam_stats {
 
 process combine_fq_bam_stats {
 
-    publishDir analysis_dir + "/fq", mode: 'copy', overwrite: true
+    publishDir params.out + "/fq", mode: 'copy', overwrite: true
 
     input:
         file("*.stat.txt") from fq_bam_stat_files.toSortedList()
@@ -258,9 +300,9 @@ process combine_fq_bam_stats {
 
 process merge_bam {
 
-    cpus cores
+    cpus params.cores
 
-    publishDir SM_alignments_dir, mode: 'copy', pattern: '*.bam*'
+    publishDir params.SM_alignments_dir, mode: 'copy', pattern: '*.bam*'
 
     tag { SM }
 
@@ -279,12 +321,12 @@ process merge_bam {
         ln -s ${bam.join(" ")} ${SM}.merged.bam
         ln -s ${bam.join(" ")}.bai ${SM}.merged.bam.bai
     else
-        sambamba merge --nthreads=${cores} --show-progress ${SM}.merged.bam ${bam.sort().join(" ")}
-        sambamba index --nthreads=${cores} ${SM}.merged.bam
+        sambamba merge --nthreads=${task.cpus} --show-progress ${SM}.merged.bam ${bam.sort().join(" ")}
+        sambamba index --nthreads=${task.cpus} ${SM}.merged.bam
     fi
 
     picard MarkDuplicates I=${SM}.merged.bam O=${SM}.bam M=${SM}.duplicates.txt VALIDATION_STRINGENCY=SILENT REMOVE_DUPLICATES=false
-    sambamba index --nthreads=${cores} ${SM}.bam
+    sambamba index --nthreads=${task.cpus} ${SM}.bam
     """
 }
 
@@ -318,7 +360,7 @@ process SM_idx_stats {
 
 process SM_combine_idx_stats {
 
-    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
+    publishDir params.out + "/SM", mode: 'copy', overwrite: true
 
     input:
         file("*.stat.txt") from bam_idxstats_set.toSortedList()
@@ -355,7 +397,7 @@ process SM_bam_stats {
 
 process combine_SM_bam_stats {
 
-    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
+    publishDir params.out + "/SM", mode: 'copy', overwrite: true
 
     input:
         file("?.stat.txt") from SM_bam_stat_files.toSortedList()
@@ -373,7 +415,7 @@ process combine_SM_bam_stats {
 
 process format_duplicates {
 
-    publishDir analysis_dir + "/duplicates", mode: 'copy', overwrite: true
+    publishDir params.out + "/duplicates", mode: 'copy', overwrite: true
 
     input:
         val duplicates_set from duplicates_file.toSortedList()
@@ -405,21 +447,19 @@ process coverage_SM {
         file("${SM}.coverage.tsv") into SM_coverage
         file("${SM}.1mb.coverage.tsv") into SM_1mb_coverage
         file("${SM}.100kb.coverage.tsv") into SM_100kb_coverage
-        file("${SM}.10kb.coverage.tsv") into SM_10kb_coverage
 
 
     """
         bam coverage ${SM}.bam > ${SM}.coverage.tsv
         bam coverage --window=1000000 ${SM}.bam > ${SM}.1mb.coverage.tsv
         bam coverage --window=100000 ${SM}.bam > ${SM}.100kb.coverage.tsv
-        bam coverage --window=10000 ${SM}.bam > ${SM}.10kb.coverage.tsv
     """
 }
 
 
 process coverage_SM_merge {
 
-    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
+    publishDir params.out + "/SM", mode: 'copy', overwrite: true
 
     input:
         val sm_set from SM_coverage.toSortedList()
@@ -439,12 +479,11 @@ process coverage_SM_merge {
 
 process coverage_bins_merge {
 
-    publishDir analysis_dir + "/SM", mode: 'copy', overwrite: true
+    publishDir params.out + "/SM", mode: 'copy', overwrite: true
 
     input:
         val mb from SM_1mb_coverage.toSortedList()
         val kb_100 from SM_100kb_coverage.toSortedList()
-        val kb_10 from SM_10kb_coverage.toSortedList()
 
     output:
         file("SM_coverage.mb.tsv.gz")
@@ -459,7 +498,7 @@ process coverage_bins_merge {
 
 process call_variants_individual {
 
-    cpus variant_cores
+    cpus params.cores
 
     tag { SM }
 
@@ -472,7 +511,7 @@ process call_variants_individual {
     """
     # Perform individual-level calling
     contigs="`samtools view -H ${SM}.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40`"
-    echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} ${SM}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O z  -  > ${SM}.{}.individual.vcf.gz"
+    echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${task.cpus} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference_handle} ${SM}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O z  -  > ${SM}.{}.individual.vcf.gz"
     order=`echo \${contigs} | tr ' ' '\\n' | awk '{ print "${SM}." \$1 ".individual.vcf.gz" }'`
     
     # Output variant sites
@@ -491,27 +530,28 @@ process call_variants_individual {
     Merge individual sites
 */
 
+
 process merge_variant_list {
 
-    publishDir analysis_dir + "/sitelist", mode: 'copy', overwrite: true
-    
+    publishDir params.out + "/variation", mode: 'copy'
+
     input:
         val sites from individual_sites.toSortedList()
 
     output:
-        file('sitelist.tsv.gz') into gz_sitelist
-        file("sitelist.tsv") into sitelist
-        file("sitelist.count.txt")
+        file("sitelist.tsv.gz") into gz_sitelist
+        file("sitelist.tsv.gz") into sitelist_stat
+        file("sitelist.tsv.gz.tbi") into gz_sitelist_index
 
 
     """
         echo ${sites}
         cat ${sites.join(" ")} | sort -k1,1 -k2,2n | uniq > sitelist.tsv
-        cat sitelist.tsv | wc -l > sitelist.count.txt
         bgzip sitelist.tsv -c > sitelist.tsv.gz && tabix -s1 -b2 -e2 sitelist.tsv.gz
     """
 }
 
+union_vcf_set = merged_bams_union.combine(gz_sitelist).combine(gz_sitelist_index)
 
 /* 
     Call variants using the merged site list
@@ -521,28 +561,32 @@ process merge_variant_list {
 
 process call_variants_union {
 
+    cpus params.cores
+
     tag { SM }
 
+    stageInMode 'link'
+
     input:
-        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai") from merged_bams_union
-        file 'sitelist.tsv.gz' from gz_sitelist
+        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai"), file('sitelist.tsv.gz'), file('sitelist.tsv.gz.tbi') from union_vcf_set
 
     output:
-        file("${SM}.union.vcf.gz") into union_vcf_set
+        file("${SM}.union.vcf.gz") into union_vcf_to_list
 
     """
         contigs="`samtools view -H ${SM}.bam | grep -Po 'SN:([^\\W]+)' | cut -c 4-40`"
-        sites=`readlink -f sitelist.tsv.gz`
-        echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,INFO/AD,SP --fasta-ref ${reference} ${SM}.bam | bcftools call -T \${sites} --skip-variants indels --multiallelic-caller -O z  -  > ${SM}.{}.union.vcf.gz"
+        echo \${contigs} | \\
+        tr ' ' '\\n' | \\
+        xargs --verbose -I {} -P ${task.cpus} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,INFO/AD,SP --fasta-ref ${reference_handle} ${SM}.bam | bcftools call -T sitelist.tsv.gz --skip-variants indels --multiallelic-caller -O z  -  > ${SM}.{}.union.vcf.gz"
         order=`echo \${contigs} | tr ' ' '\\n' | awk '{ print "${SM}." \$1 ".union.vcf.gz" }'`
 
         # Output variant sites
         bcftools concat \${order} -O v | \\
         vk geno het-polarization - | \\
-        bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "QUAL >= ${qual} || FORMAT/GT == '0/0'" |  \\
-        bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "FORMAT/DP > ${min_depth}" | \\
-        bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "INFO/MQ > ${mq}" | \\
-        bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
+        bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "QUAL >= ${qual} || FORMAT/GT == '0/0'" |  \\
+        bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "FORMAT/DP > ${min_depth}" | \\
+        bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "INFO/MQ > ${mq}" | \\
+        bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "(FORMAT/AD[*:1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
         bcftools view -O z > ${SM}.union.vcf.gz
         bcftools index ${SM}.union.vcf.gz
         rm \${order}
@@ -556,10 +600,10 @@ process generate_union_vcf_list {
 
     cpus 1 
 
-    publishDir analysis_dir + "/vcf", mode: 'copy'
+    publishDir params.out + "/vcf", mode: 'copy'
 
     input:
-       val vcf_set from union_vcf_set.toSortedList()
+       val vcf_set from union_vcf_to_list.toSortedList()
 
     output:
        file("union_vcfs.txt") into union_vcfs
@@ -569,7 +613,7 @@ process generate_union_vcf_list {
     """
 }
 
-union_vcfs_in = union_vcfs.spread(contigs)
+union_vcfs_in = union_vcfs.spread(contig_list)
 
 process merge_union_vcf_chromosome {
 
@@ -594,7 +638,7 @@ contig_raw_vcf = contig_list*.concat(".merged.raw.vcf.gz")
 
 process concatenate_union_vcf {
 
-    publishDir analysis_dir + "/vcf", mode: 'copy'
+    publishDir params.out + "/vcf", mode: 'copy'
 
     input:
         val merge_vcf from raw_vcf.toSortedList()
@@ -614,7 +658,7 @@ process concatenate_union_vcf {
 
 process filter_union_vcf {
 
-    publishDir analysis_dir + "/vcf", mode: 'copy'
+    publishDir params.out + "/vcf", mode: 'copy'
 
     input:
         set file("merged.raw.vcf.gz"), file("merged.raw.vcf.gz.csi") from raw_vcf_concatenated
@@ -639,7 +683,7 @@ filtered_vcf.into { filtered_vcf_gtcheck; filtered_vcf_stat; filtered_vcf_phylo 
 
 process calculate_gtcheck {
 
-    publishDir analysis_dir + "/concordance", mode: 'copy'
+    publishDir params.out + "/concordance", mode: 'copy'
 
     input:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_gtcheck
@@ -658,7 +702,7 @@ process calculate_gtcheck {
 
 process stat_tsv {
 
-    publishDir analysis_dir + "/vcf", mode: 'copy'
+    publishDir params.out + "/vcf", mode: 'copy'
 
     input:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_stat
@@ -676,11 +720,9 @@ process stat_tsv {
     Perform concordance analysis
 */
 
-concordance_script = Channel.fromPath("process_concordance.R")
-
 process process_concordance_results {
 
-    publishDir analysis_dir + "/concordance", mode: "copy"
+    publishDir params.out + "/concordance", mode: "copy"
 
     input:
         file 'gtcheck.tsv' from gtcheck
@@ -698,7 +740,7 @@ process process_concordance_results {
 
     """
     # Run concordance analysis
-    Rscript --vanilla ${process_concordance}
+    Rscript --vanilla `which process_concordance.R`
     """
 
 }
@@ -723,7 +765,7 @@ process generate_isotype_groups {
 
 process fq_concordance {
 
-    cpus variant_cores
+    cpus params.cores
 
     tag { SM }
 
@@ -740,39 +782,39 @@ process fq_concordance {
         # DO NOT INDEX ORIGINAL BAM; ELIMINATES CACHE!
         bam_list="`ls -1 *.bam | grep -v 'input.bam'`"
 
-        ls -1 *.bam | grep -v 'input.bam' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools index {}"
+        ls -1 *.bam | grep -v 'input.bam' | xargs --verbose -I {} -P ${task.cpus} sh -c "samtools index {}"
 
         # Generate a site list for the set of fastqs
-        rg_list="`samtools view -H input.bam | grep '@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
+        rg_list="`samtools view -H input.bam | grep '^@RG.*ID:' | cut -f 2 | sed  's/ID://'`"
         # Perform individual-level calling
         for rg in \$rg_list; do
-            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {}.\${rg}.site_list.tsv"
+            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${task.cpus} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference_handle} \${rg}.bam | bcftools call --skip-variants indels --variants-only --multiallelic-caller -O v | bcftools query -f '%CHROM\\t%POS\\n' >> {}.\${rg}.site_list.tsv"
         done;
-        cat *.site_list.tsv  | sort --temporary-directory=${tmpdir} -k1,1 -k2,2n | uniq > site_list.srt.tsv
+        cat *.site_list.tsv  | sort --temporary-directory=${params.tmpdir} -k1,1 -k2,2n | uniq > site_list.srt.tsv
         bgzip site_list.srt.tsv -c > site_list.srt.tsv.gz && tabix -s1 -b2 -e2 site_list.srt.tsv.gz
         
         # Call a union set of variants
         for rg in \$rg_list; do
-            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${variant_cores} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O z > {}.\${rg}.vcf.gz"
+            echo \${contigs} | tr ' ' '\\n' | xargs --verbose -I {} -P ${task.cpus} sh -c "samtools mpileup --redo-BAQ -r {} --BCF --output-tags DP,AD,ADF,ADR,SP --fasta-ref ${reference_handle} \${rg}.bam | bcftools call -T site_list.srt.tsv.gz --skip-variants indels --multiallelic-caller -O z > {}.\${rg}.vcf.gz"
             order=`echo \${contigs} | tr ' ' '\\n' | awk -v rg=\${rg} '{ print \$1 "." rg ".vcf.gz" }'`
             # Output variant sites
             bcftools concat \${order} -O v | \\
             vk geno het-polarization - | \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "QUAL >= 10 || FORMAT/GT == '0/0'" |  \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "FORMAT/DP > 3" | \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "INFO/MQ > ${mq}" | \\
-            bcftools filter -O u --threads ${variant_cores} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
+            bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "QUAL >= 10 || FORMAT/GT == '0/0'" |  \\
+            bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "FORMAT/DP > 3" | \\
+            bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "INFO/MQ > ${mq}" | \\
+            bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
             bcftools query -f '%CHROM\\t%POS[\\t%GT\\t${SM}\\n]' | grep -v '0/1' | awk -v rg=\${rg} '{ print \$0 "\\t" rg }' > \${rg}.rg_gt.tsv
         done;
         cat *.rg_gt.tsv > rg_gt.tsv
         touch out.tsv
-        Rscript --vanilla ${fq_concordance_script} 
+        Rscript --vanilla `which fq_concordance.R` 
     """
 }
 
 process combine_fq_concordance {
 
-    publishDir analysis_dir + "/concordance", mode: 'copy', overwrite: true
+    publishDir params.out + "/concordance", mode: 'copy', overwrite: true
 
     input:
         file("out*.tsv") from fq_concordance_out.toSortedList()
@@ -792,13 +834,13 @@ pairwise_groups_input = pairwise_groups.splitText( by:1 )
 // Look for diverged regions among isotypes.
 process pairwise_variant_compare {
 
-    publishDir analysis_dir + "/pairwise", mode: 'copy', overwrite: true
+    publishDir params.out + "/pairwise", mode: 'copy', overwrite: true
 
     tag { pair }
 
     input:
         val(pair_group) from pairwise_groups_input
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise.first() 
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_pairwise
 
     output:
         file("${group}.${isotype}.${pair.replace(",","_")}.png")
@@ -811,7 +853,7 @@ process pairwise_variant_compare {
 
     """
         bcftools query -f '%CHROM\t%POS[\t%GT]\n' -s ${pair} concordance.vcf.gz > out.tsv
-        Rscript --vanilla ${plot_pairwise_script} 
+        Rscript --vanilla `which plot_pairwise.R` 
         mv out.png ${group}.${isotype}.${pair.replace(",","_")}.png
         mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
     """
@@ -826,7 +868,7 @@ filtered_vcf_phylo_contig = filtered_vcf_phylo.spread(["I", "II", "III", "IV", "
 
 process phylo_analysis {
 
-    publishDir analysis_dir + "/phylo", mode: "copy", overwrite: true
+    publishDir params.out + "/phylo", mode: "copy", overwrite: true
 
     tag { contig }
 
@@ -851,7 +893,7 @@ trees_phylo = trees.spread(Channel.fromPath("process_trees.R"))
 
 process plot_trees {
 
-    publishDir analysis_dir + "/phylo", mode: "copy"
+    publishDir params.out + "/phylo", mode: "copy"
 
     tag { contig }
 
@@ -870,7 +912,9 @@ process plot_trees {
 
 process heterozygosity_check {
 
-    publishDir analysis_dir + "/SM", mode: "copy"
+    cpus params.cores
+
+    publishDir params.out + "/SM", mode: "copy"
 
     input:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from het_check_vcf
@@ -879,8 +923,46 @@ process heterozygosity_check {
         file("heterozygosity.tsv")
 
     """
-        bcftools query -l concordance.vcf.gz | xargs --verbose -I {} -P ${cores} sh -c "bcftools query -f '[%SAMPLE\t%GT\n]' --samples={} concordance.vcf.gz | grep '0/1' | uniq -c >> heterozygosity.tsv"
+        bcftools query -l concordance.vcf.gz | xargs --verbose -I {} -P ${task.cpus} sh -c "bcftools query -f '[%SAMPLE\t%GT\n]' --samples={} concordance.vcf.gz | grep '0/1' | uniq -c >> heterozygosity.tsv"
     """
 
 }
+
+
+
+
+workflow.onComplete {
+
+    summary = """
+
+    Pipeline execution summary
+    ---------------------------
+    Completed at: ${workflow.complete}
+    Duration    : ${workflow.duration}
+    Success     : ${workflow.success}
+    workDir     : ${workflow.workDir}
+    exit status : ${workflow.exitStatus}
+    Error report: ${workflow.errorReport ?: '-'}
+    Git info: $workflow.repository - $workflow.revision [$workflow.commitId]
+
+    """
+
+    println summary
+
+    // mail summary
+    ['mail', '-s', 'wi-nf', params.email].execute() << summary
+
+    def outlog = new File("${params.out}/log.txt")
+    outlog.newWriter().withWriter {
+        outlog << param_summary
+        outlog << summary
+    }
+
+    def primary_seq_env = new File("${params.out}/primary-seq-env.txt")
+    ['conda', 'list', '-n', 'primary-seq-env'].execute() << primary_seq_env 
+    def vcfkit_env = new File("${params.out}/vcf-kit.txt")
+    vcfkit_env << ['conda', 'list', '-n', 'vcf-kit'].execute()
+}
+
+
 
