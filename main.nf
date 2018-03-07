@@ -803,7 +803,7 @@ process fq_concordance {
             bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "QUAL >= 10 || FORMAT/GT == '0/0'" |  \\
             bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "FORMAT/DP > 3" | \\
             bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "INFO/MQ > ${mq}" | \\
-            bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "(FORMAT/AD[1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
+            bcftools filter -O u --threads ${task.cpus} --set-GTs . --include "(FORMAT/AD[*:1])/(FORMAT/DP) >= ${dv_dp} || FORMAT/GT == '0/0'" | \\
             bcftools query -f '%CHROM\\t%POS[\\t%GT\\t${SM}\\n]' | grep -v '0/1' | awk -v rg=\${rg} '{ print \$0 "\\t" rg }' > \${rg}.rg_gt.tsv
         done;
         cat *.rg_gt.tsv > rg_gt.tsv
