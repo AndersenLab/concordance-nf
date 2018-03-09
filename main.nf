@@ -913,7 +913,7 @@ workflow.onComplete {
     // mail summary
     ['mail', '-s', 'wi-nf', params.email].execute() << summary
 
-    def outlog = new File("${params.out}/report/trimming_log.txt")
+    def outlog = new File("${params.out}/log.txt")
     outlog.newWriter().withWriter {
         outlog << summary
         outlog << "\n--------pyenv-------\n"
@@ -922,6 +922,8 @@ workflow.onComplete {
         outlog << "ENV".execute().text
         outlog << "--------brew--------"
         outlog << "brew list".execute().text
+        outlog << "--------R--------"
+        outlog << "Rscript -e 'devtools::session_info()'".execute().text
     }
 
 }
