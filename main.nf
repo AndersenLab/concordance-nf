@@ -13,8 +13,10 @@
 CONTIG_LIST = ["I", "II", "III", "IV", "V", "X", "MtDNA"]
 contig_list = Channel.from(CONTIG_LIST)
 
-/*
+/* 
+    ======
     Params
+    ======
 */
 
 date = new Date().format( 'yyyyMMdd' )
@@ -53,8 +55,10 @@ if (params.debug == true) {
 }
 File fq_file = new File(params.fq_file);
 
-/*
+/* 
+    =======================
     Filtering configuration
+    =======================
 */
 
 min_depth=3
@@ -62,8 +66,10 @@ qual=30
 mq=40
 dv_dp=0.5
 
-/*
+/* 
+    ==
     UX
+    ==
 */
 
 param_summary = '''
@@ -150,14 +156,13 @@ process setup_dirs {
     """
 }
 
-/*
-    Check that reference exists
+
+/* 
+    =========
+    Alignment
+    =========
 */
 
-
-/*
-    Fastq concordance
-*/
 process perform_alignment {
 
     cpus params.cores
@@ -185,8 +190,10 @@ process perform_alignment {
 
 fq_bam_set.into { fq_cov_bam; fq_stats_bam; fq_idx_stats_bam }
 
-/*
-    Fastq coverage
+/* 
+    ========
+    Coverage
+    ========
 */
 process coverage_fq {
 
@@ -206,7 +213,7 @@ process coverage_fq {
 
 process coverage_fq_merge {
 
-    publishDir params.out + "/fq", mode: 'copy', overwrite: true
+    publishDir "${params.out}/fq", mode: 'copy', overwrite: true
 
     input:
         file fq_set from fq_coverage.toSortedList()
@@ -223,8 +230,10 @@ process coverage_fq_merge {
     """
 }
 
-/*
-    fq idx stats
+/* 
+    ==============
+    fq index stats
+    ==============
 */
 
 process fq_idx_stats {
@@ -243,7 +252,7 @@ process fq_idx_stats {
 
 process fq_combine_idx_stats {
 
-    publishDir params.out + "/fq", mode: 'copy', overwrite: true
+    publishDir "${params.out}/fq", mode: 'copy', overwrite: true
 
     input:
         file("?.stat.txt") from fq_idxstats_set.toSortedList()
@@ -258,10 +267,11 @@ process fq_combine_idx_stats {
 
 }
 
-/*
+/* 
+    ============
     fq bam stats
+    ============
 */
-
 process fq_bam_stats {
 
     tag { ID }
@@ -279,7 +289,7 @@ process fq_bam_stats {
 
 process combine_fq_bam_stats {
 
-    publishDir params.out + "/fq", mode: 'copy', overwrite: true
+    publishDir "${params.out}/fq", mode: 'copy', overwrite: true
 
     input:
         file("*.stat.txt") from fq_bam_stat_files.toSortedList()
@@ -360,7 +370,7 @@ process SM_idx_stats {
 
 process SM_combine_idx_stats {
 
-    publishDir params.out + "/SM", mode: 'copy', overwrite: true
+    publishDir "${params.out}/strain", mode: 'copy', overwrite: true
 
     input:
         file("*.stat.txt") from bam_idxstats_set.toSortedList()
@@ -397,7 +407,7 @@ process SM_bam_stats {
 
 process combine_SM_bam_stats {
 
-    publishDir params.out + "/SM", mode: 'copy', overwrite: true
+    publishDir "${params.out}/strain", mode: 'copy', overwrite: true
 
     input:
         file("?.stat.txt") from SM_bam_stat_files.toSortedList()
@@ -415,7 +425,7 @@ process combine_SM_bam_stats {
 
 process format_duplicates {
 
-    publishDir params.out + "/duplicates", mode: 'copy', overwrite: true
+    publishDir "${params.out}/duplicates", mode: 'copy', overwrite: true
 
     input:
         val duplicates_set from duplicates_file.toSortedList()
@@ -459,7 +469,7 @@ process coverage_SM {
 
 process coverage_SM_merge {
 
-    publishDir params.out + "/SM", mode: 'copy', overwrite: true
+    publishDir "${params.out}/strain", mode: 'copy', overwrite: true
 
     input:
         val sm_set from SM_coverage.toSortedList()
@@ -479,7 +489,7 @@ process coverage_SM_merge {
 
 process coverage_bins_merge {
 
-    publishDir params.out + "/SM", mode: 'copy', overwrite: true
+    publishDir "${params.out}/strain", mode: 'copy', overwrite: true
 
     input:
         val mb from SM_1mb_coverage.toSortedList()
@@ -533,7 +543,7 @@ process call_variants_individual {
 
 process merge_variant_list {
 
-    publishDir params.out + "/variation", mode: 'copy'
+    publishDir "${params.out}/variation", mode: 'copy'
 
     input:
         val sites from individual_sites.toSortedList()
@@ -565,8 +575,6 @@ process call_variants_union {
 
     tag { SM }
 
-    stageInMode 'link'
-
     input:
         set val(SM), file("${SM}.bam"), file("${SM}.bam.bai"), file('sitelist.tsv.gz'), file('sitelist.tsv.gz.tbi') from union_vcf_set
 
@@ -595,12 +603,11 @@ process call_variants_union {
 }
 
 
-
 process generate_union_vcf_list {
 
     cpus 1 
 
-    publishDir params.out + "/vcf", mode: 'copy'
+    publishDir "${params.out}/variation", mode: 'copy'
 
     input:
        val vcf_set from union_vcf_to_list.toSortedList()
@@ -617,6 +624,8 @@ union_vcfs_in = union_vcfs.spread(contig_list)
 
 process merge_union_vcf_chromosome {
 
+    cpus params.cores
+
     tag { chrom }
 
     input:
@@ -627,7 +636,7 @@ process merge_union_vcf_chromosome {
         file("${chrom}.merged.raw.vcf.gz") into raw_vcf
 
     """
-        bcftools merge --regions ${chrom} -O z -m all --file-list ${union_vcfs} > ${chrom}.merged.raw.vcf.gz
+        bcftools merge --threads ${task.cpus} --regions ${chrom} -O z -m all --file-list ${union_vcfs} > ${chrom}.merged.raw.vcf.gz
         bcftools index ${chrom}.merged.raw.vcf.gz
     """
 }
@@ -638,7 +647,9 @@ contig_raw_vcf = contig_list*.concat(".merged.raw.vcf.gz")
 
 process concatenate_union_vcf {
 
-    publishDir params.out + "/vcf", mode: 'copy'
+    cpus params.cores
+
+    publishDir "${params.out}/variation", mode: 'copy'
 
     input:
         val merge_vcf from raw_vcf.toSortedList()
@@ -647,18 +658,14 @@ process concatenate_union_vcf {
         set file("merged.raw.vcf.gz"), file("merged.raw.vcf.gz.csi") into raw_vcf_concatenated
 
     """
-        for i in ${merge_vcf.join(" ")}; do
-            ln  -s \${i} `basename \${i}`;
-        done;
-        chrom_set="";
-        bcftools concat -O z ${contig_raw_vcf.join(" ")}  > merged.raw.vcf.gz
+        bcftools concat --threads ${task.cpus} -O z ${merge_vcf.join(" ")}  > merged.raw.vcf.gz
         bcftools index merged.raw.vcf.gz
     """
 }
 
 process filter_union_vcf {
 
-    publishDir params.out + "/vcf", mode: 'copy'
+    publishDir "${params.out}/variation", mode: 'copy'
 
     input:
         set file("merged.raw.vcf.gz"), file("merged.raw.vcf.gz.csi") from raw_vcf_concatenated
@@ -678,12 +685,12 @@ process filter_union_vcf {
     """
 }
 
-filtered_vcf.into { filtered_vcf_gtcheck; filtered_vcf_stat; filtered_vcf_phylo }
+filtered_vcf.into { filtered_vcf_gtcheck; filtered_vcf_stat; }
 
 
 process calculate_gtcheck {
 
-    publishDir params.out + "/concordance", mode: 'copy'
+    publishDir "${params.out}/concordance", mode: 'copy'
 
     input:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_gtcheck
@@ -702,7 +709,7 @@ process calculate_gtcheck {
 
 process stat_tsv {
 
-    publishDir params.out + "/vcf", mode: 'copy'
+    publishDir "${params.out}/vcf", mode: 'copy'
 
     input:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_stat
@@ -722,7 +729,7 @@ process stat_tsv {
 
 process process_concordance_results {
 
-    publishDir params.out + "/concordance", mode: "copy"
+    publishDir "${params.out}/concordance", mode: "copy"
 
     input:
         file 'gtcheck.tsv' from gtcheck
@@ -730,9 +737,9 @@ process process_concordance_results {
         file 'SM_coverage.tsv' from SM_coverage_merged
 
     output:
-        file("concordance.svg")
+        file("concordance.pdf")
         file("concordance.png")
-        file("xconcordance.svg")
+        file("xconcordance.pdf")
         file("xconcordance.png")
         file("isotype_groups.tsv") into isotype_groups
         file("isotype_count.txt")
@@ -740,7 +747,7 @@ process process_concordance_results {
 
     """
     # Run concordance analysis
-    Rscript --vanilla `which process_concordance.R`
+    Rscript --vanilla `which process_concordance.R` ${params.debug}
     """
 
 }
@@ -814,7 +821,7 @@ process fq_concordance {
 
 process combine_fq_concordance {
 
-    publishDir params.out + "/concordance", mode: 'copy', overwrite: true
+    publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
 
     input:
         file("out*.tsv") from fq_concordance_out.toSortedList()
@@ -834,7 +841,7 @@ pairwise_groups_input = pairwise_groups.splitText( by:1 )
 // Look for diverged regions among isotypes.
 process pairwise_variant_compare {
 
-    publishDir params.out + "/pairwise", mode: 'copy', overwrite: true
+    publishDir "${params.out}/concordance/pairwise", mode: 'copy', overwrite: true
 
     tag { pair }
 
@@ -860,61 +867,11 @@ process pairwise_variant_compare {
 
 }
 
-filtered_vcf_phylo_contig = filtered_vcf_phylo.spread(["I", "II", "III", "IV", "V", "X", "MtDNA", "genome"])
-
-/*
-    Phylo analysis
-*/
-
-process phylo_analysis {
-
-    publishDir params.out + "/phylo", mode: "copy", overwrite: true
-
-    tag { contig }
-
-    input:
-        set file("merged.filtered.vcf.gz"), file("merged.filtered.vcf.gz.csi"), val(contig) from filtered_vcf_phylo_contig
-
-    output:
-        set val(contig), file("${contig}.tree") into trees
-
-    """
-        # generate tree
-        if [ "${contig}" == "genome" ]
-        then
-            vk phylo tree nj merged.filtered.vcf.gz > genome.tree
-        else
-            vk phylo tree nj merged.filtered.vcf.gz ${contig} > ${contig}.tree
-        fi
-    """
-}
-
-trees_phylo = trees.spread(Channel.fromPath("process_trees.R"))
-
-process plot_trees {
-
-    publishDir params.out + "/phylo", mode: "copy"
-
-    tag { contig }
-
-    input:
-        set val(contig), file("${contig}.tree"), file("process_trees.R") from trees_phylo
-
-    output:
-        file("${contig}.svg")
-        file("${contig}.png")
-
-    """
-    Rscript --vanilla process_trees.R ${contig}
-    """
-
-}
-
 process heterozygosity_check {
 
     cpus params.cores
 
-    publishDir params.out + "/SM", mode: "copy"
+    publishDir "${params.out}/concordance", mode: "copy"
 
     input:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from het_check_vcf

@@ -9,8 +9,17 @@ stack_list <- function(x) {
   stack(x)
 }
 
+args = commandArgs(trailingOnly=TRUE)
+# Debug is enabled
+if (args == "true") {
+    coverage_level = 0
+} else {
+    coverage_level = 20
+}
+
+
 coverage_20 <- (readr::read_tsv("SM_coverage.tsv") %>%
-                  dplyr::filter(coverage > 20))$strain
+                  dplyr::filter(coverage > coverage_level))$strain
 
 WI <- readr::read_tsv("https://docs.google.com/spreadsheets/d/1V6YHzblaDph01sFDI8YK_fP0H7sVebHQTXypGdiQIjI/pub?output=tsv") 
 
@@ -99,7 +108,7 @@ ggplot(gtcheck) +
   geom_histogram(aes(x=concordance, fill = isotype), binwidth = 0.00025) +
   scale_fill_manual(values = c("#808080", "#0080FF"))
 
-ggsave("concordance.svg", width = 5, height = 5)
+ggsave("concordance.pdf", width = 5, height = 5)
 ggsave("concordance.png", width = 5, height = 5)
 
 ggplot(gtcheck) +
@@ -110,7 +119,7 @@ ggplot(gtcheck) +
   geom_vline(aes(xintercept = cutoff), color = "red") +
   theme(axis.title = ggplot2::element_text(size=14, face="bold", color="black", vjust=5))
 
-ggsave("xconcordance.svg", width = 5, height = 5)
+ggsave("xconcordance.pdf", width = 5, height = 5)
 ggsave("xconcordance.png", width = 5, height = 5)
 
 # Save text files
