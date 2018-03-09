@@ -133,7 +133,7 @@ if (params.fq_file_prefix) {
 println "Using fq prefix"
 fq_file_prefix = fq_file.getParentFile().getAbsolutePath();
 fqs = Channel.from(fq_file.collect { it.tokenize( '\t' ) })
-             .map { SM, ID, LB, fq1, fq2, seq_folder -> ["${SM}-great", ID, LB, file("${params.fq_file_prefix}/${fq1}"), file("${params.fq_file_prefix}/${fq2}"), seq_folder] }
+             .map { SM, ID, LB, fq1, fq2, seq_folder -> ["${SM}", ID, LB, file("${params.fq_file_prefix}/${fq1}"), file("${params.fq_file_prefix}/${fq2}"), seq_folder] }
              .view()
 
 } else {
