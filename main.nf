@@ -42,17 +42,17 @@ if (params.debug == true) {
         *** Using debug mode ***
 
     """
-    params.fq_file = "${workflow.projectDir}/test_data/SM_sample_sheet.tsv"
     params.bamdir = "${params.out}/bam"
-    File fq_file = new File(params.fq_file);
+    params.fq_file = "${workflow.projectDir}/test_data/SM_sample_sheet.tsv"
     params.fq_file_prefix = "${workflow.projectDir}/test_data"
 
 } else {
     // The SM sheet that is used is located in the root of the git repo
     params.bamdir = "(required)"
-    params.fq_file_prefix = null;
     params.fq_file = "SM_sample_sheet.tsv"
+    params.fq_file_prefix = null;
 }
+
 File fq_file = new File(params.fq_file);
 
 /* 
@@ -130,13 +130,15 @@ if (!fq_file.exists()) {
     Fetch fastq files and additional information.
 */
 if (params.fq_file_prefix) {
+println "Using fq prefix"
 fq_file_prefix = fq_file.getParentFile().getAbsolutePath();
 fqs = Channel.from(fq_file.collect { it.tokenize( '\t' ) })
-             .map { SM, ID, LB, fq1, fq2, seq_folder -> [SM, ID, LB, file("${fq_file_prefix}/${fq1}"), file("${fq_file_prefix}/${fq2}")] }
-println fqs
+             .map { SM, ID, LB, fq1, fq2, seq_folder -> ["${SM}-great", ID, LB, file("${params.fq_file_prefix}/${fq1}"), file("${params.fq_file_prefix}/${fq2}"), seq_folder] }
+             .view()
+
 } else {
 fqs = Channel.from(fq_file.collect { it.tokenize( '\t' ) })
-         .map { SM, ID, LB, fq1, fq2, seq_folder -> [SM, ID, LB, file("${fq1}"), file("${fq2}")] }
+         .map { SM, ID, LB, fq1, fq2, seq_folder -> [SM, ID, LB, file("${fq1}"), file("${fq2}"), seq_folder] }
 }
 
 process setup_dirs {
@@ -312,7 +314,7 @@ process merge_bam {
 
     cpus params.cores
 
-    publishDir params.SM_alignments_dir, mode: 'copy', pattern: '*.bam*'
+    publishDir params.bamdir, mode: 'copy', pattern: '*.bam*'
 
     tag { SM }
 
