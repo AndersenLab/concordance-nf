@@ -892,6 +892,8 @@ process heterozygosity_check {
 
 workflow.onComplete {
 
+    user="whoami".execute().text
+
     summary = """
 
     Pipeline execution summary
@@ -903,7 +905,7 @@ workflow.onComplete {
     exit status : ${workflow.exitStatus}
     Error report: ${workflow.errorReport ?: '-'}
     Git info: $workflow.repository - $workflow.revision [$workflow.commitId]
-
+    User: ${user}
     """
 
     println summary
@@ -911,17 +913,16 @@ workflow.onComplete {
     // mail summary
     ['mail', '-s', 'wi-nf', params.email].execute() << summary
 
-    def outlog = new File("${params.out}/log.txt")
+    def outlog = new File("${params.out}/report/trimming_log.txt")
     outlog.newWriter().withWriter {
-        outlog << param_summary
         outlog << summary
+        outlog << "\n--------pyenv-------\n"
+        outlog << "pyenv versions".execute().text
+        outlog << "--------ENV--------"
+        outlog << "ENV".execute().text
+        outlog << "--------brew--------"
+        outlog << "brew list".execute().text
     }
 
-    def primary_seq_env = new File("${params.out}/primary-seq-env.txt")
-    ['conda', 'list', '-n', 'primary-seq-env'].execute() << primary_seq_env 
-    def vcfkit_env = new File("${params.out}/vcf-kit.txt")
-    vcfkit_env << ['conda', 'list', '-n', 'vcf-kit'].execute()
 }
-
-
 
