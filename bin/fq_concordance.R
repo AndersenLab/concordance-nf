@@ -24,13 +24,13 @@ alt_only<- apply(d,2,function(x)colSums(x==d, na.rm = T))
 total <- apply(d,2,function(x)colSums(!is.na(d) & !is.na(x)))
 
 alt_only <- alt_only %>% dplyr::tbl_df() %>% 
-  dplyr::mutate(b = colnames(alt_only)) %>%
+  dplyr::mutate(b = names(alt_only)) %>%
   dplyr::select(b, everything()) %>%
   tidyr::gather(fq, concordant_sites, -b) %>% 
   dplyr::rename(a = fq)
 
 total <- total %>% dplyr::tbl_df() %>% 
-  dplyr::mutate(b = colnames(total)) %>%
+  dplyr::mutate(b = names(total)) %>%
   dplyr::select(b, everything()) %>%
   tidyr::gather(fq, total_sites, -b) %>% 
   dplyr::rename(a = fq)
