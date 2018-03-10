@@ -43,17 +43,17 @@ if (params.debug == true) {
 
     """
     params.bamdir = "${params.out}/bam"
-    params.fq_file = "${workflow.projectDir}/test_data/SM_sample_sheet.tsv"
-    params.fq_file_prefix = "${workflow.projectDir}/test_data"
+    params.sample_sheet = "${workflow.projectDir}/test_data/sample_sheet.tsv"
+    params.sample_sheet_prefix = "${workflow.projectDir}/test_data"
 
 } else {
     // The SM sheet that is used is located in the root of the git repo
     params.bamdir = "(required)"
-    params.fq_file = "SM_sample_sheet.tsv"
-    params.fq_file_prefix = null;
+    params.sample_sheet = "sample_sheet.tsv"
+    params.sample_sheet_prefix = null;
 }
 
-File fq_file = new File(params.fq_file);
+File sample_sheet = new File(params.sample_sheet);
 
 /* 
     =======================
@@ -86,8 +86,8 @@ param_summary = '''
     --debug                 Set to 'true' to test          ${params.debug}
     --cores                 Regular job cores              ${params.cores}
     --out                   Directory to output results    ${params.out}
-    --fq_file               fastq file (see help)          ${params.fq_file}
-    --fq_file_prefix        fastq file (see help)          ${params.fq_file_prefix}
+    --sample_sheet          fastq file (see help)          ${params.sample_sheet}
+    --fq_prefix             fastq file (see help)          ${params.fq_prefix}
     --reference             Reference Genome               ${params.reference}
     --bamdir                Location for bams              ${params.bamdir}
     --tmpdir                A temporary directory          ${params.tmpdir}
@@ -99,7 +99,7 @@ param_summary = '''
 
 println param_summary
 
-if (params.reference == "(required)" || params.fq_file == "(required)") {
+if (params.reference == "(required)" || params.sample_sheet == "(required)") {
 
     println """
     The Set/Default column shows what the value is currently set to
@@ -117,7 +117,7 @@ if (!reference.exists()) {
     System.exit(1)
 }
 
-if (!fq_file.exists()) {
+if (!sample_sheet.exists()) {
     println """
 
     Error: fastq sheet does not exist
@@ -129,15 +129,15 @@ if (!fq_file.exists()) {
 /*
     Fetch fastq files and additional information.
 */
-if (params.fq_file_prefix) {
+if (params.sample_sheet_prefix) {
 println "Using fq prefix"
-fq_file_prefix = fq_file.getParentFile().getAbsolutePath();
-fqs = Channel.from(fq_file.collect { it.tokenize( '\t' ) })
-             .map { SM, ID, LB, fq1, fq2, seq_folder -> ["${SM}", ID, LB, file("${params.fq_file_prefix}/${fq1}"), file("${params.fq_file_prefix}/${fq2}"), seq_folder] }
+sample_sheet_prefix = sample_sheet.getParentFile().getAbsolutePath();
+fqs = Channel.from(sample_sheet.collect { it.tokenize( '\t' ) })
+             .map { SM, ID, LB, fq1, fq2, seq_folder -> ["${SM}", ID, LB, file("${params.sample_sheet_prefix}/${fq1}"), file("${params.sample_sheet_prefix}/${fq2}"), seq_folder] }
              .view()
 
 } else {
-fqs = Channel.from(fq_file.collect { it.tokenize( '\t' ) })
+fqs = Channel.from(sample_sheet.collect { it.tokenize( '\t' ) })
          .map { SM, ID, LB, fq1, fq2, seq_folder -> [SM, ID, LB, file("${fq1}"), file("${fq2}"), seq_folder] }
 }
 
@@ -148,10 +148,10 @@ process setup_dirs {
     publishDir params.out, mode: 'copy'
 
     input:
-        file 'SM_sample_sheet.tsv' from Channel.fromPath(params.fq_file)
+        file 'sample_sheet.tsv' from Channel.fromPath(params.sample_sheet)
 
     output:
-        file("SM_sample_sheet.tsv")
+        file("sample_sheet.tsv")
 
     """
         echo 'Great!'
