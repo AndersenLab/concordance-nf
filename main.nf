@@ -307,7 +307,9 @@ process combine_fq_bam_stats {
 
 
 /* 
-  Merge - Generate SM Bam
+  =================================
+  Merge - Generate strain-level BAM
+  =================================
 */
 
 process merge_bam {
@@ -353,7 +355,9 @@ bam_set.into {
 
 
 /*
-    SM_idx_stats
+    ===============================
+    strain-level samtools idx stats
+    ===============================
 */
 
 process SM_idx_stats {
@@ -389,7 +393,9 @@ process SM_combine_idx_stats {
 
 
 /*
-    SM bam stats
+    ================
+    strain-bam stats
+    ================
 */
 
 process SM_bam_stats {
@@ -566,10 +572,10 @@ process merge_variant_list {
 union_vcf_set = merged_bams_union.combine(gz_sitelist).combine(gz_sitelist_index)
 
 /* 
-    Call variants using the merged site list
+    ===================
+    Call variants union
+    ===================
 */
-
-
 
 process call_variants_union {
 
