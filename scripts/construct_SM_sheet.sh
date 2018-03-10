@@ -63,6 +63,7 @@ awk -v prefix=${prefix} -v seq_folder=${seq_folder} '{
 for seq_may_2016 in 160209_D00422_0276_AC80RDANXX-ECA 160512_700819F_0460_BHHHWNBCXX-ECA-14-ln1 160516_700819F_0461_AHNMLKBCXX-ECA-14-ln2-ECA-15-ln1 160518_700819F_0462_AHT25JBCXX-ECA-15-ln2 160518_700819F_0463_BHT25HBCXX-ECA-17-ln1 160901_D00422_0374_AC7TWJANXX-ECA; do
     out=`mktemp`
     seq_folder=${seq_may_2016}
+    suffix="`echo ${seq_folder} | cut -c 1-5`"
     prefix=/projects/b1059/data/fastq/WI/dna/processed/$seq_folder
     for i in `ls -1 $prefix/*1P.fq.gz`; do
         bname=`basename ${i}`;
@@ -71,12 +72,12 @@ for seq_may_2016 in 160209_D00422_0276_AC80RDANXX-ECA 160512_700819F_0460_BHHHWN
     done;
 
     cat ${out} |\
-    awk -v prefix=${prefix} -v seq_folder=${seq_folder} '{    
+    awk -v prefix=${prefix} -v seq_folder=${seq_folder} -v suffix=${suffix} '{    
         fq1 = $1;
         fq2 = $1;
         LB = $3;
         gsub("1P.fq.gz", "2P.fq.gz", fq2);
-        ID = $1;
+        ID = $1 + "_" + suffix;
         gsub("_1P.fq.gz", "", ID);
         split(ID, a, "[-_]")
         SM=a[2];
