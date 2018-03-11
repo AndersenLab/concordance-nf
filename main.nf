@@ -751,8 +751,8 @@ process process_concordance_results {
     output:
         file("concordance.pdf")
         file("concordance.png")
-        file("xconcordance.pdf")
-        file("xconcordance.png")
+        file("concordance_above_99.png")
+        file("concordance_above_99.pdf")
         file("isotype_groups.tsv") into isotype_groups
         file("isotype_count.txt")
         file("WI_metadata.tsv")
@@ -792,7 +792,7 @@ process fq_concordance {
         set val(SM), file("input.bam"), file("input.bam.bai") from fq_concordance_bam
 
     output:
-        file('out.tsv') into fq_concordance_out
+        file('rg_gt.tsv') into fq_concordance_process
 
     """
         # Split bam file into individual read groups; Ignore MtDNA
@@ -826,8 +826,24 @@ process fq_concordance {
             bcftools query -f '%CHROM\\t%POS[\\t%GT\\t${SM}\\n]' | grep -v '0/1' | awk -v rg=\${rg} '{ print \$0 "\\t" rg }' > \${rg}.rg_gt.tsv
         done;
         cat *.rg_gt.tsv > rg_gt.tsv
-        touch out.tsv
-        Rscript --vanilla `which fq_concordance.R` 
+    """
+}
+
+process process_fq_concordance {
+    
+    cpus params.cores
+
+    tag { SM }
+
+    input:
+        file('out.tsv') from fq_concordance_process
+
+    output:
+        file('out.tsv') into fq_concordance_out
+
+    """
+        touch out.tsv 
+        Rscript --vanilla `which fq_concordance.R`
     """
 }
 
