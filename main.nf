@@ -721,7 +721,7 @@ process calculate_gtcheck {
 
 process stat_tsv {
 
-    publishDir "${params.out}/vcf", mode: 'copy'
+    publishDir "${params.out}/variation", mode: 'copy'
 
     input:
         set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_stat
@@ -792,7 +792,7 @@ process fq_concordance {
         set val(SM), file("input.bam"), file("input.bam.bai") from fq_concordance_bam
 
     output:
-        file('rg_gt.tsv') into fq_concordance_process
+        set val(SM), file('rg_gt.tsv') into fq_concordance_process
 
     """
         # Split bam file into individual read groups; Ignore MtDNA
@@ -836,7 +836,7 @@ process process_fq_concordance {
     tag { SM }
 
     input:
-        file('out.tsv') from fq_concordance_process
+        set val(SM), file('rg_gt.tsv') from fq_concordance_process
 
     output:
         file('out.tsv') into fq_concordance_out
@@ -868,6 +868,8 @@ pairwise_groups_input = pairwise_groups.splitText( by:1 )
 
 // Look for diverged regions among isotypes.
 process pairwise_variant_compare {
+
+
 
     publishDir "${params.out}/concordance/pairwise", mode: 'copy', overwrite: true
 

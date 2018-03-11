@@ -119,8 +119,8 @@ ggplot(gtcheck) +
   geom_vline(aes(xintercept = cutoff), color = "red") +
   theme(axis.title = ggplot2::element_text(size=14, face="bold", color="black", vjust=5))
 
-ggsave("xconcordance.pdf", width = 5, height = 5)
-ggsave("xconcordance.png", width = 5, height = 5)
+ggsave("concordance_above_99.pdf", width = 5, height = 5)
+ggsave("concordance_above_99.png", width = 5, height = 5)
 
 # Save text files
 readr::write_tsv(gtcheck, paste0("gtcheck.tsv"))
