@@ -34,7 +34,7 @@ if(ncol(df) == 1) {
 
     # Alt only
     alt_only <- apply(df, 2, function(x) colSums(x==df, na.rm = T) )
-    total <- apply(df, 2, function(x) colSums(!is.na(d) & !is.na(x)) )
+    total <- apply(df, 2, function(x) colSums(!is.na(df) & !is.na(x)) )
 
     alt_only <- alt_only %>% dplyr::tbl_df() %>% 
       dplyr::mutate(b = colnames(alt_only)) %>%
