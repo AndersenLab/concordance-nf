@@ -46,25 +46,29 @@ if (params.debug == true) {
     params.sample_sheet = "${workflow.projectDir}/test_data/sample_sheet.tsv"
     params.sample_sheet_prefix = "${workflow.projectDir}/test_data"
 
+    // Filter configuration
+    min_depth=0
+    qual=0
+    mq=1
+    dv_dp=0.1
+    max_missing=1.0
+
 } else {
-    // The SM sheet that is used is located in the root of the git repo
+    // The sample sheet that is used is located in the root of the git repo
     params.bamdir = "(required)"
     params.sample_sheet = "sample_sheet.tsv"
     params.sample_sheet_prefix = null;
+
+    // Filter configuration
+    min_depth=3
+    qual=30
+    mq=40
+    dv_dp=0.5
+    max_missing=0.05
+
 }
 
 File sample_sheet = new File(params.sample_sheet);
-
-/* 
-    =======================
-    Filtering configuration
-    =======================
-*/
-
-min_depth=3
-qual=30
-mq=40
-dv_dp=0.5
 
 /* 
     ==
@@ -685,7 +689,7 @@ process filter_union_vcf {
     """
         bcftools view merged.raw.vcf.gz | \\
         vk filter ALT --max=0.99 - | \\
-        vk filter MISSING --max=0.05 - | \\
+        vk filter MISSING --max=${max_missing} - | \\
         vk filter REF --min=1 - | \\
         vk filter ALT --min=1 - | \\
         bcftools view -O z - > concordance.vcf.gz
