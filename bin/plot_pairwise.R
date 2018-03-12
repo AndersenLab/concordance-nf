@@ -20,4 +20,3 @@ ggplot(df, aes(x = bin, y = discordant)) +
 
 ggsave("out.png", width = 12, height = 3)
 
-
