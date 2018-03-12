@@ -648,8 +648,8 @@ process merge_union_vcf_chromosome {
         file("${chrom}.merged.raw.vcf.gz") into raw_vcf
 
     """
-        bcftools merge --threads ${task.cpus} --regions ${chrom} -O z -m all --file-list ${union_vcfs} > ${chrom}.merged.raw.vcf.gz
-        bcftools index ${chrom}.merged.raw.vcf.gz
+        bcftools merge --threads ${task.cpus-1} --regions ${chrom} -O z -m all --file-list ${union_vcfs} > ${chrom}.merged.raw.vcf.gz
+        bcftools index --threads ${task.cpus-1} ${chrom}.merged.raw.vcf.gz
     """
 }
 
@@ -670,8 +670,8 @@ process concatenate_union_vcf {
         set file("merged.raw.vcf.gz"), file("merged.raw.vcf.gz.csi") into raw_vcf_concatenated
 
     """
-        bcftools concat --threads ${task.cpus} -O z ${merge_vcf.join(" ")}  > merged.raw.vcf.gz
-        bcftools index merged.raw.vcf.gz
+        bcftools concat --threads ${task.cpus-1} -O z ${merge_vcf.join(" ")}  > merged.raw.vcf.gz
+        bcftools index --threads ${task.cpus-1} merged.raw.vcf.gz
     """
 }
 
@@ -730,7 +730,7 @@ process stat_tsv {
         file("concordance.stats") into filtered_stats
 
     """
-        bcftools stats --verbose concordance.vcf.gz > concordance.stats
+        bcftools stats --threads --threads ${task.cpus-1} --verbose concordance.vcf.gz > concordance.stats
     """
 
 }
