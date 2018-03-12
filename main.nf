@@ -639,7 +639,7 @@ process merge_union_vcf_chromosome {
 
     """
         bcftools merge --threads ${task.cpus} --regions ${chrom} -O z -m all --file-list ${union_vcfs} > ${chrom}.merged.raw.vcf.gz
-        bcftools index ${chrom}.merged.raw.vcf.gz
+        bcftools index --threads ${task.cpus} ${chrom}.merged.raw.vcf.gz
     """
 }
 
@@ -661,7 +661,7 @@ process concatenate_union_vcf {
 
     """
         bcftools concat --threads ${task.cpus} -O z ${merge_vcf.join(" ")}  > merged.raw.vcf.gz
-        bcftools index merged.raw.vcf.gz
+        bcftools index --threads ${task.cpus} merged.raw.vcf.gz
     """
 }
 
