@@ -30,7 +30,7 @@ existing_WI <- WI %>%
   dplyr::filter(strain %in% coverage_20) %>%
   dplyr::filter(isotype != "NA")
 
-f <- file("isotype_count.txt")
+isotype_count_file <- file("isotype_count.txt")
 
 cutoff <- 0.999
 
@@ -76,8 +76,9 @@ isotype_groups <- stack_list(unique(lapply(strain_list, function(x) {
   sort(unique(unlist(grouped_strains)))
 }))) %>%
   dplyr::rename(strain = values, group = ind) %>%
-  dplyr::mutate(group = ifelse(strain == "LSJ1", 0, group)) %>%
-  dplyr::mutate(group = ifelse(strain == "JU2250", -1, group)) %>%
+  dplyr::mutate(group = ifelse(strain == "LSJ1", -1, group)) %>%
+  dplyr::mutate(group = ifelse(strain == "JU2250", -2, group)) %>%
+  dplyr::mutate(group = ifelse(strain == "ED3046", -3, group)) %>%
   dplyr::distinct() %>% 
   dplyr::group_by(group) %>%
   tidyr::nest(strain) %>%
@@ -141,4 +142,4 @@ readr::write_tsv(pr_strain_comparison, paste0("problem_strains.tsv"))
 
 isotypes <- length(unique(isotype_groups$group))
 
-writeLines(paste0(isotypes, sep = "\n"), f)
+writeLines(paste0(isotypes, sep = "\n"), isotype_count_file)
