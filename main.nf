@@ -314,7 +314,7 @@ process merge_bam {
 
     cpus params.cores
 
-    publishDir params.bamdir, mode: 'copy', pattern: '*.bam*'
+    publishDir "${params.bamdir}/WI/strain", mode: 'copy', pattern: '*.bam*'
 
     tag { SM }
 
@@ -638,8 +638,8 @@ process merge_union_vcf_chromosome {
         file("${chrom}.merged.raw.vcf.gz") into raw_vcf
 
     """
-        bcftools merge --threads ${task.cpus} --regions ${chrom} -O z -m all --file-list ${union_vcfs} > ${chrom}.merged.raw.vcf.gz
-        bcftools index --threads ${task.cpus} ${chrom}.merged.raw.vcf.gz
+        bcftools merge --regions ${chrom} -O z -m all --file-list ${union_vcfs} > ${chrom}.merged.raw.vcf.gz
+        bcftools index ${chrom}.merged.raw.vcf.gz
     """
 }
 
