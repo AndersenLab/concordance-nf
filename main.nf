@@ -532,7 +532,7 @@ process call_variants_individual {
     rm \${order}
 
     bcftools view -M 2 -m 2 -O v ${SM}.individual.vcf.gz | \\
-    bcftools filter --include 'DP > 3' | \\
+    bcftools filter --include 'FORMAT/DP > 3' | \\
     egrep '(^#|1/1)' | \\
     bcftools query -f '%CHROM\\t%POS\\t%REF,%ALT\\n' > ${SM}.individual.sites.tsv
     """
