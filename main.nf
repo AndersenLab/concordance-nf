@@ -314,21 +314,17 @@ process merge_bam {
 
     cpus params.cores
 
-    publishDir "${params.bamdir}/WI/strain", mode: 'copy', pattern: '*.bam*'
-
     tag { SM }
 
     input:
         set SM, bam, index from SM_aligned_bams.groupTuple()
 
     output:
-        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai") into bam_set
+        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai") into merged_bam_set
         file("${SM}.duplicates.txt") into duplicates_file
         
     """
-
     count=`echo ${bam.join(" ")} | tr ' ' '\\n' | wc -l`
-
     if [ "\${count}" -eq "1" ]; then
         ln -s ${bam.join(" ")} ${SM}.merged.bam
         ln -s ${bam.join(" ")}.bai ${SM}.merged.bam.bai
@@ -336,20 +332,135 @@ process merge_bam {
         sambamba merge --nthreads=${task.cpus} --show-progress ${SM}.merged.bam ${bam.sort().join(" ")}
         sambamba index --nthreads=${task.cpus} ${SM}.merged.bam
     fi
-
     picard MarkDuplicates I=${SM}.merged.bam O=${SM}.bam M=${SM}.duplicates.txt VALIDATION_STRINGENCY=SILENT REMOVE_DUPLICATES=false
     sambamba index --nthreads=${task.cpus} ${SM}.bam
     """
 }
 
-bam_set.into { 
+merged_bam_set.into {
+    merged_bams_individual;
+    merged_bams_union;
+    subsampled_bams_for_coverage;
+    fq_concordance_bam;
+    merged_bams_for_coverage;
+    bams_idxstats;
+    bams_stats
+}
+
+//subsample
+/*
+process merge_bam {
+
+    cpus params.cores
+
+    tag { SM }
+
+    input:
+        set SM, bam, index from SM_aligned_bams.groupTuple()
+
+    output:
+        set val(SM), file("${SM}.merged.bam"), file("${SM}.merged.bam.bai") into merged_bam_set
+        file("${SM}.duplicates.txt") into duplicates_file
+        
+    """
+
+    count=`echo ${bam.join(" ")} | tr ' ' '\\n' | wc -l`
+
+    if [ "\${count}" -eq "1" ]; then
+        ln -s ${bam.join(" ")} ${SM}.bam
+        ln -s ${bam.join(" ")}.bai ${SM}.bam.bai
+    else
+        sambamba merge --nthreads=${task.cpus} --show-progress ${SM}.bam ${bam.sort().join(" ")}
+        sambamba index --nthreads=${task.cpus} ${SM}.bam
+    fi
+
+    picard MarkDuplicates I=${SM}.bam O=${SM}.merged.bam M=${SM}.duplicates.txt VALIDATION_STRINGENCY=SILENT REMOVE_DUPLICATES=false
+    sambamba index --nthreads=${task.cpus} ${SM}.merged.bam
+    """
+}
+
+merged_bam_set.into { 
                merged_bams_for_coverage;
-               merged_bams_individual;
-               merged_bams_union;
                bams_idxstats;
                bams_stats;
-               fq_concordance_bam
+               merged_bam_for_subsample
              }
+
+process sub_sample_bam {
+
+    tag { SM }
+
+    cpus params.cores
+
+    input:
+        set val(SM), file("${SM}.merged.bam"), file("${SM}.merged.bam.bai") from merged_bam_for_subsample
+
+    output:
+        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai") into bam_set
+
+    """
+    # Subsample high-depth bams
+    coverage=`goleft covstats ${SM}.merged.bam | awk 'NR > 1 { printf "%5.0f", \$1 }'`
+    if [ \${coverage} -gt 20 ];
+    then
+        echo "Coverage is above 20x; Subsampling to 20x"
+        # Calculate fraction of reads to keep
+        frac_keep=`echo "20.0 / \${coverage}" | bc -l | awk '{printf "%0.2f", \$0 }'`
+        SM_use="${SM}.bam"
+        sambamba view --nthreads=${task.cpus} --show-progress --format=bam --with-header --subsample=\${frac_keep} ${SM}.merged.bam > \${SM_use}
+        sambamba index --nthreads ${task.cpus} \${SM_use}
+    else
+        echo "Coverage is below 20x; No subsampling"
+        mv ${SM}.merged.bam ${SM}.bam
+        sambamba index --nthreads ${task.cpus} ${SM}.bam
+    fi
+    """
+}
+
+bam_set.into {
+    merged_bams_individual;
+    merged_bams_union;
+    subsampled_bams_for_coverage;
+    fq_concordance_bam
+} */
+
+
+process subsampled_coverage_SM {
+
+    tag { SM }
+
+    input:
+        set val(SM), file("${SM}.bam"), file("${SM}.bam.bai") from subsampled_bams_for_coverage
+
+    output:
+        file("${SM}.coverage.tsv") into subsampled_SM_coverage
+
+
+    """
+        bam coverage ${SM}.bam > ${SM}.coverage.tsv
+    """
+}
+
+
+process subsampled_coverage_SM_merge {
+
+    publishDir "${params.out}/strain", mode: 'copy', overwrite: true
+
+    input:
+        val sm_set from subsampled_SM_coverage.toSortedList()
+
+    output:
+        file("SM_coverage_subsampled.tsv")
+
+    """
+        echo -e 'bam\\tcontig\\tstart\\tend\\tproperty\\tvalue' > SM_coverage.full.tsv
+        cat ${sm_set.join(" ")} >> SM_coverage.full.tsv
+
+        # Generate condensed version
+        cat <(echo -e 'strain\\tcoverage') <(cat SM_coverage.full.tsv | grep 'genome' | grep 'depth_of_coverage' | cut -f 1,6 | sort) > SM_coverage_subsampled.tsv
+    """
+}
+
 
 
 /*
@@ -489,6 +600,11 @@ process coverage_SM_merge {
     """
 }
 
+SM_coverage_merged.into {
+    for_concordance;
+    for_strain_list
+}
+
 process coverage_bins_merge {
 
     publishDir "${params.out}/strain", mode: 'copy', overwrite: true
@@ -601,9 +717,7 @@ process call_variants_union {
         bcftools index ${SM}.union.vcf.gz
         rm \${order}
     """
-
 }
-
 
 process generate_union_vcf_list {
 
@@ -687,7 +801,7 @@ process filter_union_vcf {
     """
 }
 
-filtered_vcf.into { filtered_vcf_gtcheck; filtered_vcf_stat; }
+filtered_vcf.into { filtered_vcf_gtcheck; filtered_vcf_stat; strain_pairwise_vcf; npr1_allele}
 
 
 process calculate_gtcheck {
@@ -736,14 +850,14 @@ process process_concordance_results {
     input:
         file 'gtcheck.tsv' from gtcheck
         file 'filtered.stats.txt' from filtered_stats
-        file 'SM_coverage.tsv' from SM_coverage_merged
+        file 'SM_coverage.tsv' from for_concordance
 
     output:
         file("concordance.pdf")
         file("concordance.png")
         file("xconcordance.pdf")
         file("xconcordance.png")
-        file("isotype_groups.tsv") into isotype_groups
+        file("isotype_groups.tsv") into isotype_groups_ch
         file("isotype_count.txt")
         file("WI_metadata.tsv")
 
@@ -753,6 +867,8 @@ process process_concordance_results {
     """
 
 }
+
+isotype_groups_ch.into { isotype_groups; for_combinded_final}
 
 process generate_isotype_groups {
 
@@ -772,7 +888,7 @@ process generate_isotype_groups {
 
 
 
-process fq_concordance {
+/*process fq_concordance {
 
     cpus params.cores
 
@@ -834,16 +950,15 @@ process combine_fq_concordance {
     """
         cat <(echo 'a\tb\tconcordant_sites\ttotal_sites\tconcordance\tSM') out*.tsv > fq_concordance.tsv
     """
+} */
 
-
-}
 
 pairwise_groups_input = pairwise_groups.splitText( by:1 )
 
 // Look for diverged regions among isotypes.
 process pairwise_variant_compare {
 
-    publishDir "${params.out}/concordance/pairwise", mode: 'copy', overwrite: true
+    publishDir "${params.out}/concordance/pairwise/within_group", mode: 'copy', overwrite: true
 
     tag { pair }
 
@@ -887,7 +1002,200 @@ process heterozygosity_check {
 
 }
 
+// The belows are new processes for futher checking
 
+process strain_pairwise_list {
+
+    executor 'local'
+
+   // publishDir "${params.out}/concordance/pairwise/between_strains", mode: "copy"
+
+    input:
+        file("SM_coverage.tsv") from for_strain_list
+
+    output:
+        file("strain_pairwise_list.tsv") into strain_pairwise
+
+    """
+        # generate strain level pairwise comparison list
+        cat SM_coverage.tsv | cut -f1 | sed '1d' > raw_strain.tsv
+
+        for i in `cat raw_strain.tsv` ; do
+            for j in `cat raw_strain.tsv` ; do
+                if [ "\$i" '<' "\$j" ] ; then
+                    echo \${i}-\${j}
+                fi
+            done
+        done | tr "-" "\t" > strain_pairwise_list.tsv
+    """
+}
+
+strain_pairwise.splitText( by:1 )
+               .set { new_strain_pairwise }
+
+
+process query_between_group_pairwise_gt {
+
+    publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true, pattern: '*.png'
+
+    cpus 16
+
+    //memory '64 GB'
+
+    //tag "${sp1}_${sp2}"
+
+    input:
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from strain_pairwise_vcf
+
+    output:
+        file("out_gt.tsv") into gt_pairwise
+
+    """
+        # query the genotype for pairwise comparison
+        bcftools query -f '%CHROM\\t%POS[\\t%GT]\\n' concordance.vcf.gz -H | sed 's/\\:GT//g' | sed 's/\\[[0-9]*\\]//g' | sed 's/\\#//g' | csvtk rename -t -f 1 -n CHROM > out_gt.tsv
+    """
+}
+
+
+process between_group_pairwise_query_gt {
+
+    publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true, pattern: '*.png'
+
+    //cpus params.cores
+
+    //memory '64 GB'
+
+    tag "${sp1}_${sp2}"
+
+    input:
+        val(pair_group) from new_strain_pairwise
+        file("out_gt.tsv") from gt_pairwise
+
+    output:
+        set val(sp1), val(sp2), file("${sp1}-${sp2}.queried.tsv") into queried_gt
+    
+    script:
+        pair_group = pair_group.trim().split("\t")
+        sp1 = pair_group[0]
+        sp2 = pair_group[1]
+
+    """ 
+        csvtk cut -t -f CHROM,POS,${sp1},${sp2} out_gt.tsv > ${sp1}-${sp2}.queried.tsv
+    """
+}
+
+process between_group_pairwise {
+
+    publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true, pattern: '*.png'
+
+    //cpus params.cores
+
+    //memory '64 GB'
+
+    tag "${sp1}_${sp2}"
+
+    input:
+        set val(sp1), val(sp2), file("${sp1}-${sp2}.queried.tsv") from queried_gt
+
+    output:
+        file("${sp1}-${sp2}.tsv") into between_group_pairwise_out
+        file("${sp1}-${sp2}.disconcordance.png") optional true
+        file("${sp1}-${sp2}.hist.png") optional true
+    
+    script:
+
+    """            
+        process_strain_pairwise.R ${sp1} ${sp2} ${sp1}-${sp2}.queried.tsv
+        mv condition_results.tsv ${sp1}-${sp2}.tsv
+    """
+}
+
+/*process between_group_pairwise {
+
+    publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true, pattern: '*.png'
+
+    //cpus params.cores
+
+    //memory '64 GB'
+
+    tag "${sp1}_${sp2}"
+
+    input:
+        val(pair_group) from queried_gt
+        file("out_gt.tsv") from gt_pairwise
+
+    output:
+        file("${sp1}-${sp2}.tsv") into between_group_pairwise_out
+        file("${sp1}-${sp2}.disconcordance.png") optional true
+        file("${sp1}-${sp2}.hist.png") optional true
+    
+    script:
+        pair_group = pair_group.trim().split("\t")
+        sp1 = pair_group[0]
+        sp2 = pair_group[1]
+
+    """            
+        csvtk cut -t -f CHROM,POS,${sp1},${sp2} out_gt.tsv > ${sp1}-${sp2}.queried.tsv
+        process_strain_pairwise.R ${sp1} ${sp2}
+        mv condition_results.tsv ${sp1}-${sp2}.tsv
+        #rm condition_results.tsv
+    """
+}*/
+
+
+process npr1_allele_check {
+
+    cpus 20
+
+    publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
+
+    input:
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from npr1_allele
+
+    output:
+        file("npr1_allele_strain.tsv") into npr1_out
+
+    """
+        echo -e 'problematic_strain\\tgt' > npr1_allele_strain.tsv
+        bcftools view --threads 20 -t X:4768788 concordance.vcf.gz | bcftools query -f '[%SAMPLE\\t%GT\\n]' | awk '\$2 != "1/1"' > npr1_allele_strain.tsv
+    """
+}
+
+process merge_betweengroup_pairwise_output {
+
+    publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
+
+    input:
+        val bg_pairwise from between_group_pairwise_out.toSortedList()
+
+    output:
+        file("merge_betweengroup_pairwise_output.tsv") into combine_pairwise_results_ch
+
+
+    """
+        echo ${bg_pairwise}
+        echo -e 'pairwise\\tconcordant_bin_gt_70\\tmax_discordant_bin_count_lt_3\\tmean_discordant_bin_count_lt_2.5\\tno_bin_lt_0.9\\tsuspected_introgress' > merge_betweengroup_pairwise_output.tsv
+        cat ${bg_pairwise.join(" ")} | cut -f 1,2,3,4,5,6 >> merge_betweengroup_pairwise_output.tsv
+    """
+}
+
+
+process combine_pairwise_results {
+
+    publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
+
+    input:
+        file("isotyep_groups.tsv") from for_combinded_final
+        file("merge_betweengroup_pairwise_output.tsv") from combine_pairwise_results_ch
+        file("npr1_allele_strain.tsv") from npr1_out
+
+    output:
+        file("new_isotype_groups.tsv")
+
+    """
+        merge_groups_info.R isotyep_groups.tsv merge_betweengroup_pairwise_output.tsv npr1_allele_strain.tsv
+    """
+}
 
 
 workflow.onComplete {
@@ -925,6 +1233,5 @@ workflow.onComplete {
         outlog << "--------R--------"
         outlog << "Rscript -e 'devtools::session_info()'".execute().text
     }
-
 }
 
