@@ -1036,7 +1036,7 @@ strain_pairwise.splitText( by:1 )
 
 process query_between_group_pairwise_gt {
 
-    publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true
+    publishDir "${params.out}/variation", mode: 'copy', overwrite: true
 
     cpus 16
 
