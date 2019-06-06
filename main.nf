@@ -1036,7 +1036,7 @@ strain_pairwise.splitText( by:1 )
 
 process query_between_group_pairwise_gt {
 
-    publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true, pattern: '*.png'
+    publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true
 
     cpus 16
 
@@ -1056,7 +1056,7 @@ process query_between_group_pairwise_gt {
     """
 }
 
-
+/*
 process between_group_pairwise_query_gt {
 
     publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true, pattern: '*.png'
@@ -1109,8 +1109,9 @@ process between_group_pairwise {
         mv condition_results.tsv ${sp1}-${sp2}.tsv
     """
 }
+*/
 
-/*process between_group_pairwise {
+process between_group_pairwise {
 
     publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true, pattern: '*.png'
 
@@ -1121,7 +1122,7 @@ process between_group_pairwise {
     tag "${sp1}_${sp2}"
 
     input:
-        val(pair_group) from queried_gt
+        val(pair_group) from new_strain_pairwise
         file("out_gt.tsv") from gt_pairwise
 
     output:
@@ -1136,11 +1137,11 @@ process between_group_pairwise {
 
     """            
         csvtk cut -t -f CHROM,POS,${sp1},${sp2} out_gt.tsv > ${sp1}-${sp2}.queried.tsv
-        process_strain_pairwise.R ${sp1} ${sp2}
+        process_strain_pairwise.R ${sp1} ${sp2} ${sp1}-${sp2}.queried.tsv
         mv condition_results.tsv ${sp1}-${sp2}.tsv
-        #rm condition_results.tsv
+        rm ${sp1}-${sp2}.queried.tsv
     """
-}*/
+}
 
 
 process npr1_allele_check {
@@ -1157,7 +1158,7 @@ process npr1_allele_check {
 
     """
         echo -e 'problematic_strain\\tgt' > npr1_allele_strain.tsv
-        bcftools view --threads 20 -t X:4768788 concordance.vcf.gz | bcftools query -f '[%SAMPLE\\t%GT\\n]' | awk '\$2 != "1/1"' > npr1_allele_strain.tsv
+        bcftools view --threads 20 -t X:4768788 concordance.vcf.gz | bcftools query -f '[%SAMPLE\\t%GT\\n]' | awk '\$2 != "1/1"' >> npr1_allele_strain.tsv
     """
 }
 

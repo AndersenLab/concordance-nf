@@ -96,6 +96,7 @@ dag.*
 
 # output
 concordance*
+version_1/
 
 # report
 report.html*
