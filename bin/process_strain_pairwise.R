@@ -1,4 +1,5 @@
 #!/usr/bin/env Rscript
+library(ggplot2)
 library(tidyverse)
 # Read data from Rscript input
 args <- commandArgs(trailingOnly=TRUE)
@@ -7,7 +8,7 @@ args <- commandArgs(trailingOnly=TRUE)
 df_raw <- readr::read_tsv(args[3], col_names = TRUE)
 
 df_raw_1 <- df_raw %>%
-  dplyr::select(CHROM, POS, args[1], args[2]) #BRC20113_JU1530#
+  dplyr::select(CHROM, POS, args[1], args[2]) #BRC20113_JU1530#AB4-ECA251
 
 #df_raw_1 <- df_raw %>%
 #  dplyr::select(CHROM, POS, BRC20113, JU1530)
@@ -35,6 +36,7 @@ bin_count <- df %>%
   dplyr::summarise(count = n()) %>%
   dplyr::filter(type == "FALSE")
 
+
 # accordant bin count
 concordant_bin <- df %>%
   dplyr::ungroup() %>%
@@ -47,9 +49,44 @@ concordant_bin <- df %>%
 # output dataframe for cutoff, accordant bin counts > 70; maximum disconcordant bin count <= 3, mean disconcordant bin count less than 2.
 condition_results <- data.frame(pairwise_group = glue::glue("{args[1]}-{args[2]}"),
            accordant_bin_count = isTRUE(bin_count$count > 70),
-           max_discordant_bin_count_lt_3 = isTRUE(max(concordant_bin$count) <= 3),
+           max_discordant_bin_count_lt_3 = isTRUE(max(concordant_bin$count) <= 5), # cutoff should be 3, 5 for test 
            mean_discordant_bin_count_lt_2.5 = isTRUE(mean(concordant_bin$count) <= 2),
            no_bin_lt_0.9 = isTRUE(min(concordant_bin$bin) >= 90))
+
+
+if(nrow(bin_count) == 0) {
+  print("No concordant bin")
+  for_distribution <- data.frame(pairwise_group=character(),
+                 accordant_bin_count=integer(), 
+                 max_discordant_bin_count_lt_3=integer(), 
+                 mean_discordant_bin_count_lt_2.5=integer(),
+                 no_bin_lt_0.9=integer()) 
+  readr::write_tsv(for_distribution, "for_distribution.tsv", col_names = FALSE)
+} else if(nrow(concordant_bin) == 0) {
+  print("no cordant bin")
+  for_distribution <- data.frame(pairwise_group=character(),
+                 accordant_bin_count=integer(), 
+                 max_discordant_bin_count_lt_3=integer(), 
+                 mean_discordant_bin_count_lt_2.5=integer(),
+                 no_bin_lt_0.9=integer()) 
+  readr::write_tsv(for_distribution, "for_distribution.tsv", col_names = FALSE)
+} else if(is.infinite(max(concordant_bin$count))) {
+  print("no cordant bin")
+  for_distribution <- data.frame(pairwise_group=character(),
+                 accordant_bin_count=integer(), 
+                 max_discordant_bin_count_lt_3=integer(), 
+                 mean_discordant_bin_count_lt_2.5=integer(),
+                 no_bin_lt_0.9=integer()) 
+  readr::write_tsv(for_distribution, "for_distribution.tsv", col_names = FALSE)
+} else {
+  for_distribution <- data.frame(pairwise_group = glue::glue("{args[1]}-{args[2]}"),
+           accordant_bin_count = bin_count$count,
+           max_discordant_bin_count_lt_3 = max(concordant_bin$count, na.rm= TRUE),
+           mean_discordant_bin_count_lt_2.5 = mean(concordant_bin$count, na.rm= TRUE),
+           no_bin_lt_0.9 = min(concordant_bin$bin, na.rm= TRUE))
+  readr::write_tsv(for_distribution, "for_distribution.tsv", col_names = FALSE)
+}
+
 
 condition_results <- condition_results %>%
   dplyr::mutate(suspected_introgress = ifelse(accordant_bin_count == "TRUE" & max_discordant_bin_count_lt_3 == "TRUE" & mean_discordant_bin_count_lt_2.5 == "TRUE",

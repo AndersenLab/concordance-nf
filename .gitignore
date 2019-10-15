@@ -93,11 +93,9 @@ work/
 
 .nextflow
 dag.*
-
-# output
-concordance*
-version_1/
-
-# report
 report.html*
-test_sample_sheet.sh
+
+# ouput file
+concordance-*/
+DEBUG_*/
+

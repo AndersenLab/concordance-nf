@@ -1,4 +1,5 @@
-#!/usr/bin/env Rscript --vanilla
+#!/usr/bin/env Rscript
+library(ggplot2)
 library(tidyverse)
 try(setwd(dirname(rstudioapi::getActiveDocumentContext()$path)))
 # Used in calculating isotypes

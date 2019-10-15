@@ -2,7 +2,7 @@
 
 # Extract genotypes of pairs in mannal_pairwise.txt  
 echo "extract genotypes"
-gt_file=/projects/b1059/projects/Ye/repo/concordance-nf/concordance-20190602/variation/out_gt.tsv
+gt_file=/projects/b1059/projects/Ye/repo/concordance-nf/concordance-20190611/variation/out_gt.tsv
 parallel --verbose csvtk cut -t -f CHROM,POS,{} ${gt_file} \> manual_pairwise_gt/{}.tsv < mannal_pairwise.txt
 
 # Rename the outputs

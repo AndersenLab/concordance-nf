@@ -1,4 +1,5 @@
 library(tidyverse)
+library(ggplot2)
 df <- readr::read_tsv("out.tsv", col_names = c("CHROM", "POS", "A", "B")) %>%
   dplyr::mutate(bin = round(POS/1E6)) %>%
   dplyr::filter(A != "./.", B != "./.", A != "0/1", B != "0/1") %>%
