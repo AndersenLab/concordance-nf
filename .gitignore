@@ -93,3 +93,9 @@ work/
 
 .nextflow
 dag.*
+report.html*
+
+# ouput file
+concordance-*/
+DEBUG_*/
+

@@ -1,4 +1,5 @@
-#!/usr/bin/env Rscript --vanilla
+#!/usr/bin/env Rscript
+library(ggplot2)
 library(tidyverse)
 try(setwd(dirname(rstudioapi::getActiveDocumentContext()$path)))
 # Used in calculating isotypes
@@ -90,7 +91,8 @@ isotype_groups <- dplyr::left_join(isotype_groups, existing_WI, by = c("strain")
   dplyr::left_join(SM_coverage) %>%
   dplyr::mutate(group = as.integer(group)) %>%
   dplyr::group_by(group) %>%
-  dplyr::mutate(avg_lat = abs(latitude - mean(latitude, na.rm = T)), avg_lon = abs(longitude - mean(longitude, na.rm = T))) %>%
+  dplyr::mutate(avg_lat = abs(as.numeric(latitude) - mean(as.numeric(latitude), na.rm = T)), 
+                avg_lon = abs(as.numeric(longitude) - mean(as.numeric(longitude), na.rm = T))) %>%
   dplyr::mutate(unique_isotypes_per_group = length(unique(purrr::discard(isotype, is.na)))) %>%
   dplyr::group_by(isotype) %>%
   dplyr::mutate(unique_groups_per_isotype = length(unique(group))) %>%
