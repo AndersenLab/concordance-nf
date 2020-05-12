@@ -80,19 +80,17 @@ param_summary = '''
 workflow {
 
     hard_filtered_vcf = Channel.fromPath("${params.vcf}")
-    vcf_index = Channel.fromPath("${params.vcf}.tbi")
+    vcf_index = Channel.fromPath("${params.vcf}.tbi") // make sure the index format is consistent in process inputs
     bam_coverage = Channel.fromPath("${params.bam_coverage}")
 
 
-    hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & query_between_group_pairwise_gt & npr1_allele_check )
+    hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & query_between_group_pairwise_gt & npr1_allele_check & strain_pairwise_list)
 
     calculate_gtcheck.out.combine(bam_coverage) | process_concordance_results
 
     process_concordance_results.out.isotype_groups_ch | generate_isotype_groups
 
     generate_isotype_groups.out.splitText( by:1 ).combine(hard_filtered_vcf).combine(vcf_index) | pairwise_variant_compare // this is for strains of same isotype
-
-    bam_coverage | strain_pairwise_list
 
     strain_pairwise_list.out.splitText( by:1 ).combine(query_between_group_pairwise_gt.out) | between_group_pairwise 
 
@@ -236,14 +234,14 @@ process strain_pairwise_list {
     publishDir "${params.out}/concordance/pairwise/between_strains", mode: "copy"
 
     input:
-        file("SM_coverage.tsv")// from for_strain_list
+        tuple file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi")
 
     output:
         path("strain_pairwise_list.tsv")//into strain_pairwise
 
     """
         # generate strain level pairwise comparison list
-        cat SM_coverage.tsv | cut -f1 | sed '1d' | grep -v "^N2\$" > raw_strain.tsv
+        bcftools query -l concordance.vcf.gz | grep -v "^N2\$" > raw_strain.tsv
 
         for i in `cat raw_strain.tsv` ; do
             echo \${i}-N2
