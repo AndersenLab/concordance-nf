@@ -84,7 +84,7 @@ workflow {
     bam_coverage = Channel.fromPath("${params.bam_coverage}")
 
 
-    hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & heterozygosity_check & query_between_group_pairwise_gt & npr1_allele_check )
+    hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & query_between_group_pairwise_gt & npr1_allele_check )
 
     calculate_gtcheck.out.combine(bam_coverage) | process_concordance_results
 
@@ -112,7 +112,7 @@ process calculate_gtcheck {
     publishDir "${params.out}/concordance", mode: 'copy'
 
     input:
-        tuple file("concordance.vcf.gz"), file("concordance.vcf.gz.csi")
+        tuple file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi")
 
     output:
         file("gtcheck.tsv")
@@ -128,7 +128,7 @@ process stat_tsv {
     publishDir "${params.out}/vcf", mode: 'copy'
 
     input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") from filtered_vcf_stat
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") from filtered_vcf_stat
 
     output:
         file("concordance.stats") into filtered_stats
@@ -189,7 +189,7 @@ process pairwise_variant_compare {
     tag { pair }
 
     input:
-        tuple val(pair_group), file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") //from filtered_vcf_pairwise
+        tuple val(pair_group), file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") //from filtered_vcf_pairwise
 
     output:
         file("${group}.${isotype}.${pair.replace(",","_")}.png")
@@ -208,7 +208,7 @@ process pairwise_variant_compare {
         mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
     """
 }
-
+/*
 process heterozygosity_check {
 
     cpus params.cores
@@ -216,7 +216,7 @@ process heterozygosity_check {
     publishDir "${params.out}/concordance", mode: "copy"
 
     input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") //from het_check_vcf
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") //from het_check_vcf
 
     output:
         file("heterozygosity.tsv")
@@ -226,7 +226,7 @@ process heterozygosity_check {
     """
 
 }
-
+*/
 // The belows are new processes for futher checking
 
 process strain_pairwise_list {
@@ -257,12 +257,12 @@ process strain_pairwise_list {
 
 process query_between_group_pairwise_gt {
 
-    publishDir "${params.out}/variation", mode: 'copy', overwrite: true
+//    publishDir "${params.out}/variation", mode: 'copy', overwrite: true
 
     cpus params.cores
 
     input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") //from strain_pairwise_vcf
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") //from strain_pairwise_vcf
 
     output:
         file("out_gt.tsv") //into gt_pairwise
@@ -309,7 +309,7 @@ process npr1_allele_check {
     publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
 
     input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.csi") //from npr1_allele
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") //from npr1_allele
 
     output:
         file("npr1_allele_strain.tsv") //into npr1_out
