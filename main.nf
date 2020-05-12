@@ -81,26 +81,27 @@ workflow {
 
     hard_filtered_vcf = Channel.fromPath("${params.vcf}")
     vcf_index = Channel.fromPath("${params.vcf}.tbi")
+    bam_coverage = Channel.fromPath("${params.bam_coverage}")
 
 
     hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & heterozygosity_check & query_between_group_pairwise_gt & npr1_allele_check )
 
-    calculate_gtcheck.out | process_concordance_results
+    calculate_gtcheck.out.combine(bam_coverage) | process_concordance_results
 
     process_concordance_results.out.isotype_groups_ch | generate_isotype_groups
 
     generate_isotype_groups.out.splitText( by:1 ).combine(hard_filtered_vcf).combine(vcf_index) | pairwise_variant_compare // this is for strains of same isotype
 
- //   strain_pairwise_list
+    bam_coverage | strain_pairwise_list
 
-//  strain_pairwise_list.out.splitText( by:1 ).combine(query_between_group_pairwise_gt.out) | between_group_pairwise 
+    strain_pairwise_list.out.splitText( by:1 ).combine(query_between_group_pairwise_gt.out) | between_group_pairwise 
 
-//    between_group_pairwise.out.cutoff_distribution | cutoff_distribution
+    between_group_pairwise.out.cutoff_distribution | cutoff_distribution
 
-//    between_group_pairwise.out.between_group_pairwise_out.toSortedList() | merge_betweengroup_pairwise_output
+    between_group_pairwise.out.between_group_pairwise_out.toSortedList() | merge_betweengroup_pairwise_output
 
 
-//    process_concordance_results.out.isotype_groups_ch.combine(merge_betweengroup_pairwise_output.out).combine(npr1_allele_check.out) | combine_pairwise_results
+    process_concordance_results.out.isotype_groups_ch.combine(merge_betweengroup_pairwise_output.out).combine(npr1_allele_check.out) | combine_pairwise_results
 
 }
 
@@ -142,7 +143,7 @@ process process_concordance_results {
     publishDir "${params.out}/concordance", mode: "copy"
 
     input:
-        file("gtcheck.tsv") // from gtcheck
+        tuple file("gtcheck.tsv"), file("SM_coverage.tsv") // from gtcheck
 //        file 'filtered.stats.txt' from filtered_stats
 //        file 'SM_coverage.tsv' from for_concordance
 
@@ -158,7 +159,7 @@ process process_concordance_results {
 
     """
     # Run concordance analysis
-    Rscript --vanilla ${workflow.projectDir}/bin/process_concordance.R ${params.bam_coverage} 
+    Rscript --vanilla ${workflow.projectDir}/bin/process_concordance.R SM_coverage.tsv 
     """
 }
 
@@ -234,22 +235,18 @@ process strain_pairwise_list {
 
     publishDir "${params.out}/concordance/pairwise/between_strains", mode: "copy"
 
- //   input:
-  //      file("SM_coverage.tsv") from for_strain_list
+    input:
+        file("SM_coverage.tsv")// from for_strain_list
 
     output:
         path("strain_pairwise_list.tsv")//into strain_pairwise
 
     """
         # generate strain level pairwise comparison list
-        cat ${params.bam_coverage} | cut -f1 | sed '1d' > raw_strain.tsv
+        cat SM_coverage.tsv | cut -f1 | sed '1d' | grep -v "^N2\$" > raw_strain.tsv
 
         for i in `cat raw_strain.tsv` ; do
-            for j in `cat raw_strain.tsv` ; do
-                if [ "\$i" '<' "\$j" ] ; then
-                    echo \${i}-\${j}
-                fi
-            done
+            echo \${i}-N2
         done | tr "-" "\t" > strain_pairwise_list.tsv
     """
 }
@@ -283,8 +280,7 @@ process between_group_pairwise {
     tag "${sp1}_${sp2}"
 
     input:
-        val(pair_group) //from new_strain_pairwise
-        file("out_gt.tsv") //from gt_pairwise
+        tuple val(pair_group), file("out_gt.tsv") //from gt_pairwise
 
     output:
         path "${sp1}-${sp2}.tsv", emit: between_group_pairwise_out
@@ -372,7 +368,7 @@ process combine_pairwise_results {
         file("new_isotype_groups.tsv")
 
     """
-        merge_groups_info.R isotype_groups.tsv merge_betweengroup_pairwise_output.tsv npr1_allele_strain.tsv
+        Rscript --vanilla ${workflow.projectDir}/bin/merge_groups_info.R isotype_groups.tsv merge_betweengroup_pairwise_output.tsv npr1_allele_strain.tsv
     """
 }
 
