@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 library(ggplot2)
 library(tidyverse)
-try(setwd(dirname(rstudioapi::getActiveDocumentContext()$path)))
+#try(setwd(dirname(rstudioapi::getActiveDocumentContext()$path)))
 # Used in calculating isotypes
 stack_list <- function(x) {
   if (is.null(names(x)) == T) {
@@ -12,15 +12,22 @@ stack_list <- function(x) {
 
 args = commandArgs(trailingOnly=TRUE)
 # Debug is enabled
-if (args == "true") {
-    coverage_level = 0
-} else {
-    coverage_level = 20
-}
+# if (args == "true") {
+#     coverage_level = 0
+# } else {
+#     coverage_level = 20
+# }
 
 
-coverage_20 <- (readr::read_tsv("SM_coverage.tsv") %>%
-                  dplyr::filter(coverage > coverage_level))$strain
+# coverage_20 <- (readr::read_tsv("SM_coverage.tsv") %>%
+#                   dplyr::filter(coverage > coverage_level))$strain
+
+SM_coverage <- read.delim(args[1], stringsAsFactors=FALSE) %>% rename(strain=Sample)
+
+SM_coverage$coverage = rowMeans(SM_coverage[,c("I", "II", "III", "IV", "V")], na.rm=TRUE)
+
+SM_coverage <- select(SM_coverage, strain, coverage)
+
 
 WI <- readr::read_tsv("https://docs.google.com/spreadsheets/d/1V6YHzblaDph01sFDI8YK_fP0H7sVebHQTXypGdiQIjI/pub?output=tsv") 
 
@@ -28,7 +35,7 @@ WI %>% readr::write_tsv("WI_metadata.tsv")
 
 existing_WI <- WI %>%
   dplyr::select(strain, isotype, latitude, longitude) %>%
-  dplyr::filter(strain %in% coverage_20) %>%
+#  dplyr::filter(strain %in% coverage_20) %>%
   dplyr::filter(isotype != "NA")
 
 f <- file("isotype_count.txt")
@@ -36,25 +43,33 @@ f <- file("isotype_count.txt")
 cutoff <- 0.999
 
 gtcheck <- readr::read_tsv("gtcheck.tsv") %>%
-  dplyr::filter((i %in% coverage_20) & (j %in% coverage_20)) %>%
+#  dplyr::filter((i %in% coverage_20) & (j %in% coverage_20)) %>%
   dplyr::mutate(concordance = 1-(discordance/sites)) %>%
-  dplyr::mutate(isotype = concordance > cutoff) %>%
-  dplyr::filter(!(i %in% c("LSJ1", "JU2250")) & !(j %in% c("LSJ1", "JU2250")))
+  dplyr::mutate(isotype = concordance > cutoff) #%>%
+#  dplyr::filter(!(i %in% c("LSJ1", "JU2250")) & !(j %in% c("LSJ1", "JU2250")))
 
 # Generate strains that do not group with any other strains (single strains)
+# single_strains <- gtcheck %>%
+#   dplyr::select(i, j, isotype) %>%
+#   tidyr::gather(col, strain, -isotype) %>%
+#   dplyr::group_by(strain) %>%
+#   dplyr::mutate(single_strain = (sum(isotype, na.rm = T) == 0)) %>%
+#   dplyr::distinct(.keep_all = T) %>%
+#   dplyr::select(strain, single_strain) %>% 
+#   dplyr::filter(single_strain)
+
 single_strains <- gtcheck %>%
   dplyr::select(i, j, isotype) %>%
   tidyr::gather(col, strain, -isotype) %>%
   dplyr::group_by(strain) %>%
-  dplyr::mutate(single_strain = (sum(isotype, na.rm = T) == 0)) %>%
-  dplyr::distinct(.keep_all = T) %>%
-  dplyr::select(strain, single_strain) %>% 
-  dplyr::filter(single_strain)
+  dplyr::summarise(single_strain = sum(isotype, na.rm = T)) %>% 
+dplyr::filter(single_strain==0)
+
 
 # Add LSJ1
-single_strains <- dplyr::bind_rows(list(strain = "LSJ1", single_strain = T),
-                                   list(strain = "JU2250", single_strain = T),
-                                   single_strains)
+# single_strains <- dplyr::bind_rows(list(strain = "LSJ1", single_strain = T),
+#                                    list(strain = "JU2250", single_strain = T),
+#                                    single_strains)
 
 single_strains <- as.data.frame(list(i = single_strains$strain,
                                      j = single_strains$strain,
@@ -77,15 +92,16 @@ isotype_groups <- stack_list(unique(lapply(strain_list, function(x) {
   sort(unique(unlist(grouped_strains)))
 }))) %>%
   dplyr::rename(strain = values, group = ind) %>%
-  dplyr::mutate(group = ifelse(strain == "LSJ1", 0, group)) %>%
-  dplyr::mutate(group = ifelse(strain == "JU2250", -1, group)) %>%
-  dplyr::distinct() %>% 
-  dplyr::group_by(group) %>%
-  tidyr::nest(strain) %>%
-  dplyr::distinct(data, .keep_all = T) %>%
-  tidyr::unnest()
+  dplyr::select(group, everything())
+  # dplyr::mutate(group = ifelse(strain == "LSJ1", 0, group)) %>%
+  # dplyr::mutate(group = ifelse(strain == "JU2250", -1, group)) %>%
+  # dplyr::distinct() %>% 
+  # dplyr::group_by(group) %>%
+  # tidyr::nest(strain) %>%
+  # dplyr::distinct(data, .keep_all = T) %>%
+  # tidyr::unnest()
 
-SM_coverage <- readr::read_tsv("SM_coverage.tsv")
+#SM_coverage <- readr::read_tsv("SM_coverage.tsv")
 
 isotype_groups <- dplyr::left_join(isotype_groups, existing_WI, by = c("strain")) %>%
   dplyr::left_join(SM_coverage) %>%
