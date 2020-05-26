@@ -9,14 +9,6 @@
 nextflow.preview.dsl=2
 // For now, this pipeline requires NXF_VER >= 20.01.0
 
-/*
-    Params
-*/
-
-// Define contigs here!
-CONTIG_LIST = ["I", "II", "III", "IV", "V", "X", "MtDNA"]
-contig_list = Channel.from(CONTIG_LIST)
-
 /* 
     ======
     Params
@@ -28,10 +20,6 @@ params.out = "concordance-${date}"
 params.debug = false
 
 
-//reference_handle = file("${params.reference}/*")
-
-//fq_concordance_script = file("fq_concordance.R")
-
 // Debug
 if (params.debug == true) {
     println """
@@ -39,7 +27,7 @@ if (params.debug == true) {
         *** Using debug mode ***
 
     """
-    params.vcf = "${workflow.projectDir}/test_data/concordance_chrI.hard-filter.vcf.gz"
+    params.vcf = "${workflow.projectDir}/test_data/concordance.65k.SNP.vcf.gz"
     params.bam_coverage = "${workflow.projectDir}/test_data/SM_coverage.tsv"
 
 } else {
@@ -120,30 +108,15 @@ process calculate_gtcheck {
         bcftools gtcheck -H -G 1 concordance.vcf.gz | egrep '^CN' | cut -f 2-6 >> gtcheck.tsv
     """
 }
-/*
-process stat_tsv {
 
-    publishDir "${params.out}/vcf", mode: 'copy'
 
-    input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") from filtered_vcf_stat
 
-    output:
-        file("concordance.stats") into filtered_stats
-
-    """
-        bcftools stats --verbose concordance.vcf.gz > concordance.stats
-    """
-}
-*/
 process process_concordance_results {
 
     publishDir "${params.out}/concordance", mode: "copy"
 
     input:
-        tuple file("gtcheck.tsv"), file("SM_coverage.tsv") // from gtcheck
-//        file 'filtered.stats.txt' from filtered_stats
-//        file 'SM_coverage.tsv' from for_concordance
+        tuple file("gtcheck.tsv"), file("SM_coverage.tsv")
 
     output:
         file("concordance.pdf")
@@ -161,7 +134,6 @@ process process_concordance_results {
     """
 }
 
-//isotype_groups_ch.into { isotype_groups; for_combined_final}
 
 process generate_isotype_groups {
 
@@ -177,9 +149,7 @@ process generate_isotype_groups {
 
 }
 
-//pairwise_groups_input = pairwise_groups.splitText( by:1 )
 
-// Look for diverged regions among isotypes.
 process pairwise_variant_compare {
 
     publishDir "${params.out}/concordance/pairwise/within_group", mode: 'copy', overwrite: true
@@ -206,26 +176,9 @@ process pairwise_variant_compare {
         mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
     """
 }
-/*
-process heterozygosity_check {
 
-    cpus params.cores
 
-    publishDir "${params.out}/concordance", mode: "copy"
-
-    input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") //from het_check_vcf
-
-    output:
-        file("heterozygosity.tsv")
-
-    """
-        bcftools query -l concordance.vcf.gz | xargs --verbose -I {} -P ${task.cpus} sh -c "bcftools query -f '[%SAMPLE\t%GT\n]' --samples={} concordance.vcf.gz | grep '0/1' | uniq -c >> heterozygosity.tsv"
-    """
-
-}
-*/
-// The belows are new processes for futher checking
+// The belows are new processes by Ye for futher checking
 
 process strain_pairwise_list {
 
@@ -249,21 +202,19 @@ process strain_pairwise_list {
     """
 }
 
-//strain_pairwise.splitText( by:1 )
-//               .set { new_strain_pairwise }
 
 
 process query_between_group_pairwise_gt {
 
-//    publishDir "${params.out}/variation", mode: 'copy', overwrite: true
+    publishDir "${params.out}/variation", mode: 'copy', overwrite: true
 
     cpus params.cores
 
     input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") //from strain_pairwise_vcf
+        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") 
 
     output:
-        file("out_gt.tsv") //into gt_pairwise
+        file("out_gt.tsv") 
 
     """
         # query the genotype for pairwise comparison
@@ -278,7 +229,7 @@ process between_group_pairwise {
     tag "${sp1}_${sp2}"
 
     input:
-        tuple val(pair_group), file("out_gt.tsv") //from gt_pairwise
+        tuple val(pair_group), file("out_gt.tsv") 
 
     output:
         path "${sp1}-${sp2}.tsv", emit: between_group_pairwise_out
@@ -323,10 +274,10 @@ process merge_betweengroup_pairwise_output {
     publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
 
     input:
-        file(bg_pairwise) //from between_group_pairwise_out.toSortedList()
+        file(bg_pairwise) 
 
     output:
-        file("merge_betweengroup_pairwise_output.tsv")// into combine_pairwise_results_ch
+        file("merge_betweengroup_pairwise_output.tsv")
 
 
     """
@@ -341,7 +292,7 @@ process cutoff_distribution {
     publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
 
     input:
-        file(cutoff_val) //from cutoff_distribution.toSortedList()
+        file(cutoff_val) 
 
     output:
         file("cutoff_distribution.tsv")
