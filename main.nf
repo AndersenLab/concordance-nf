@@ -252,7 +252,7 @@ process query_between_group_pairwise_gt {
     cpus params.cores
 
     input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") 
+        tuple file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") 
 
     output:
         file("out_gt.tsv") 
@@ -299,7 +299,7 @@ process npr1_allele_check {
     publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
 
     input:
-        set file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") //from npr1_allele
+        tuple file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") //from npr1_allele
 
     output:
         file("npr1_allele_strain.tsv") //into npr1_out
