@@ -18,6 +18,8 @@ nextflow.preview.dsl=2
 date = new Date().format( 'yyyyMMdd' )
 params.out = "concordance-${date}"
 params.debug = false
+params.help = false
+params.info_sheet = "${workflow.projectDir}/bin/C._elegans_WI_strain_info_20200715.tsv"
 
 
 // Debug
@@ -27,23 +29,21 @@ if (params.debug == true) {
         *** Using debug mode ***
 
     """
-    params.vcf = "${workflow.projectDir}/test_data/concordance.65k.SNP.vcf.gz"
+    params.vcf = "${workflow.projectDir}/test_data/concordance.test.vcf.gz"
     params.bam_coverage = "${workflow.projectDir}/test_data/SM_coverage.tsv"
+    params.concordance_cutoff = 0.99
 
 } else {
     params.vcf = "(required)"
     params.bam_coverage = "(required)"
+    params.concordance_cutoff = 0.9995
 }
 
 
 
-/* 
-    ==
-    UX
-    ==
-*/
+def log_summary() {
 
-param_summary = '''
+out = '''
 
 ┌─┐┌─┐┌┐┌┌─┐┌─┐┬─┐┌┬┐┌─┐┌┐┌┌─┐┌─┐  ┌┐┌┌─┐
 │  │ │││││  │ │├┬┘ ││├─┤││││  ├┤───│││├┤ 
@@ -51,18 +51,34 @@ param_summary = '''
                                                          
 ''' + """
 
-    parameters          description                                                               Set/Default
-    ==========          ===========                                                               =======
+nextflow main.nf -profile quest --debug=true
 
-    --debug             Set to 'true' to test                                                     ${params.debug}
-    --cores             Regular job cores                                                         ${params.cores}
-    --out               Directory to output results                                               ${params.out}
-    --vcf               Hard filtered vcf                                                         ${params.vcf}
-    --bam_coverage      Strain level mqc_mosdepth-coverage-per-contig_1.txt from alignment-nf     ${params.bam_coverage}
+nextflow main.nf -profile quest --vcf=a.vcf.gz --bam_coverage=mqc_mosdepth-coverage-per-contig_1.txt
+
+    parameters           description                                                               Set/Default
+    ==========           ===========                                                               =======
+
+    --debug              Set to 'true' to test                                                     ${params.debug}
+    --cores              Regular job cores                                                         ${params.cores}
+    --out                Directory to output results                                               ${params.out}
+    --vcf                Hard filtered vcf                                                         ${params.vcf}
+    --bam_coverage       Strain level mqc_mosdepth-coverage-per-contig_1.txt from alignment-nf     ${params.bam_coverage}
+    --info_sheet         Strain sheet containing exisiting isotype assignment                      ${params.info_sheet}
+    --concordance_cutoff Cutoff of concordance value to count two strains as same isotype          ${params.concordance_cutoff}
 
     HELP: http://andersenlab.org/dry-guide/pipeline-concordance/
 
 """
+out
+}
+
+
+log.info(log_summary())
+
+if (params.help) {
+    exit 1
+}
+
 
 
 workflow {
@@ -72,15 +88,15 @@ workflow {
     bam_coverage = Channel.fromPath("${params.bam_coverage}")
 
 
-    hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & query_between_group_pairwise_gt & npr1_allele_check & strain_pairwise_list)
+    hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & query_between_group_pairwise_gt & npr1_allele_check & strain_pairwise_list_N2)
 
     calculate_gtcheck.out.combine(bam_coverage) | process_concordance_results
 
     process_concordance_results.out.isotype_groups_ch | generate_isotype_groups
 
-    generate_isotype_groups.out.splitText( by:1 ).combine(hard_filtered_vcf).combine(vcf_index) | pairwise_variant_compare // this is for strains of same isotype
+    generate_isotype_groups.out.splitText( by:1 ).combine(hard_filtered_vcf).combine(vcf_index) | within_group_pairwise // this is for strains of same isotype
 
-    strain_pairwise_list.out.splitText( by:1 ).combine(query_between_group_pairwise_gt.out) | between_group_pairwise 
+    strain_pairwise_list_N2.out.splitText( by:1 ).combine(query_between_group_pairwise_gt.out) | between_group_pairwise // this is for each pair of strains
 
     between_group_pairwise.out.cutoff_distribution | cutoff_distribution
 
@@ -130,7 +146,7 @@ process process_concordance_results {
 
     """
     # Run concordance analysis
-    Rscript --vanilla ${workflow.projectDir}/bin/process_concordance.R SM_coverage.tsv 
+    Rscript --vanilla ${workflow.projectDir}/bin/process_concordance.R SM_coverage.tsv ${params.info_sheet} ${params.concordance_cutoff}
     """
 }
 
@@ -150,7 +166,7 @@ process generate_isotype_groups {
 }
 
 
-process pairwise_variant_compare {
+process within_group_pairwise {
 
     publishDir "${params.out}/concordance/pairwise/within_group", mode: 'copy', overwrite: true
 
@@ -161,7 +177,7 @@ process pairwise_variant_compare {
 
     output:
         file("${group}.${isotype}.${pair.replace(",","_")}.png")
-        file("${group}.${isotype}.${pair.replace(",","_")}.tsv")
+    //    file("${group}.${isotype}.${pair.replace(",","_")}.tsv")
 
     script:
         pair_group = pair_group.trim().split("\t")
@@ -179,6 +195,31 @@ process pairwise_variant_compare {
 
 
 // The belows are new processes by Ye for futher checking
+
+
+process strain_pairwise_list_N2 {
+
+    executor 'local'
+
+//    publishDir "${params.out}/concordance/pairwise/between_strains", mode: "copy"
+
+    input:
+        tuple file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi")
+
+    output:
+        path("strain_pairwise_list.tsv")//into strain_pairwise
+
+    """
+        # generate strain level pairwise comparison list
+        bcftools query -l concordance.vcf.gz | grep -v "^N2\$" > raw_strain.tsv
+
+        for i in `cat raw_strain.tsv` ; do
+            echo \${i}-N2
+        done | tr "-" "\t" > strain_pairwise_list.tsv
+    """
+}
+
+
 
 process strain_pairwise_list {
 
