@@ -1,5 +1,4 @@
 #!/usr/bin/env Rscript
-library(roperators)
 library(tidyverse)
 # Read data from Rscript input
 args <- commandArgs(trailingOnly=TRUE)
@@ -27,7 +26,7 @@ df_combine_2 <- df_pairwise %>%
 
 df <- dplyr::left_join(df_combine_1, df_combine_2, by = "strain")
 
-df$fail_pairwise %na<-% "FALSE"
+df <- df %>% mutate(fail_pairwise = ifelse(is.na(fail_pairwise), "FALSE", fail_pairwise))
 
 # write out
 
