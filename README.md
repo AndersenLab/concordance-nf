@@ -1,136 +1,57 @@
 # concordance-nf
 
-Perform Fastq-Profiling in the current working directory.
+Group isotypes based on strain-level vcf.
 
 ### Usage
 ```
-nextflow run main.nf -resume
+nextflow main.nf -profile quest --debug=true
+
+nextflow main.nf -profile quest --vcf=a.vcf.gz --bam_coverage=mqc_mosdepth-coverage-per-contig_1.txt
 ```
 
-### Configuration
-
-The following variables should be set in either `~/.nextflow/config` OR `nextflow.config`
-
-A temporary directory:
+### Parameters
 ```
-tmpdir = "/projects/b1042/AndersenLab/tmp`"
-```
-
-A genome name and reference file. The reference must be indexed with bwa.
-```
-genome = "WS245"
-reference = "/projects/b1059/data/genomes/c_elegans/${genome}/${genome}.fa.gz"
+                     details                                                                   default
+--debug              Set to 'true' to test                                                     false
+--cores              Regular job cores                                                         see config
+--out                Directory to output results                                               concordance-date
+--vcf                Hard filtered vcf                                                         NA, required
+--bam_coverage       Strain level mqc_mosdepth-coverage-per-contig_1.txt from alignment-nf     NA, required
+--info_sheet         Strain sheet containing exisiting isotype assignment                      NA, required
+--concordance_cutoff Cutoff of concordance value to count two strains as same isotype          0.9995
 ```
 
-__Cores/threads for different processes__
-```
-alignment_cores = 16
-variant_cores = 6
-compression_threads = 4
-```
-
-__Output directories__
-
-The `analysis_dir` will output a structured directory of results that are detailed below. The `SM_alignments_dir` will output bams for each strain.
+### Results and notes
 
 ```
-analysis_dir = "/projects/b1059/analysis/WI-concordance" # For output of results.
-SM_alignments_dir = "/projects/b1059/data/alignments/WI/SM" # For sample level alignments.
-```
-
-Process level options can also be set:
-```
-process {
-    module='gcc/5.1.0:R/3.3.1'
-    $perform_alignment {
-        cpus = 4
-    }
-    $call_variants_individual {
-        cpus = 6
-        memory = '8G'
-    }
-    $call_variants_union {
-        cpus = 6
-        memory = '8G'
-    }
-    $merge_union_vcf {
-        cpus = 20
-        memory = '50G'
-    }
-    $filter_union_vcf {
-        cpus = 20
-        memory = '50G'
-    }
-
-}
-```
-
-### Results
-
-The pipeline results are output in the following structure.
-
-```
-├── strain_set.json # A list of strains used in the analysis (json format).
 ├── concordance
-│   ├── concordance.png                      # Histogram of concordance, colored by isotype.
-│   ├── concordance.svg
-│   ├── fq_concordance.tsv -   -  -  -  -  - # Concordance numbers at a fastq-level
-│   ├── gtcheck.tsv                          # output of bcftools gtcheck 
-│   ├── isotype_groups.tsv -   -  -  -  -  - # Generated isotype groupings.
-│   ├── problem_SM.tsv                       # Problematic groupings, if any.
-│   ├── xconcordance.png -  -  -  -  -  -  - # Zoomed in view of concordance.
-│   └── xconcordance.svg
-├── duplicates
-│   └── bam_duplicates.tsv                   # Summary of duplicate reads (determined by picard).
-├── phylo
-│   ├── genome.png                           # Genome phylogeny
-│   ├── genome.svg
-│   ├── genome.tree                          # Newick format of tree
-│   ├── I.png # Chromosome I phylogeny
-│   ├── I.svg
-│   ├── I.tree
-│   ├── ...
-│   ├── MtDNA.png
-│   ├── MtDNA.svg
-│   ├── MtDNA.tree
-├── sitelist
-│   ├── sitelist.count.txt                   # Number of sites called.
-│   ├── sitelist.tsv                         # List of sites used in genotyping.
-│   ├── sitelist.tsv.gz                      # Compressed and indexed (with .tbi) list of sites.
-│   └── sitelist.tsv.gz.tbi                
-├── fq
-│   ├── fq_bam_idxstats.tsv   -  -  -  -  -  # Stats generated with `samtools idxstats`
-│   ├── fq_bam_stats.tsv                     # Stats generated with `samtools stats`
-│   ├── fq_coverage.full.tsv  -  -  -  -  -  # Detailed coverage numbers
-│   └── fq_coverage.tsv                      # Summary coverage numbers.
-├── SM
-│   ├── SM_bam_idxstats.tsv                  # Strain-level statistics; Same as fq descriptions above.
-│   ├── SM_bam_stats.tsv
-│   ├── SM_coverage.full.tsv
-│   └── SM_coverage.tsv
-└── vcf
-    ├── concordance.vcf.gz        # Filtered VCF, filtered for true SNPs (no monomorphic sites)
-    ├── concordance.vcf.gz.csi    # Concordance VCF Index
-    ├── concordance.stats         # Stats from concordance vcf. Contains unumber of SNPs
-    └── union_vcfs.txt            # List of VCFs that are combined for performing concordance.
+│   │
+│   ├── gtcheck.tsv              # The raw pairwise comparison of variants in strains, used by /bin/process_concordance.R to define isotypes.
+│   │                            # IMPORTANT: one should manually run process_concordance.R to inspect isotype assignment and adjust concordance cutoff.
+│   │ 
+│   │   # Output of process_concordance.R with provided concordance cutoff. 
+│   ├── isotype_count.txt        # Number of isotypes.
+│   ├── isotype_groups.tsv       # Isotype assignment incorporating the existing isotypes.
+│   ├── problem_strains.tsv      # Strains with potential issues to look into.
+│   ├── WI_metadata.tsv          # A copy of the --info_sheet.
+│   ├── concordance.png          # Histogram of concordance, colored by isotype.
+│   ├── concordance.pdf
+│   ├── xconcordance.png         # Zoomed in view of the plots.
+│   ├── xconcordance.pdf
+│   │ 
+│   │   # Results of checks Ye added. 
+│   ├── npr1_allele_strain.tsv   # Any strains with the N2 npr-1 allele (lab dervied) is most likely not a wild isolate. 
+│   ├── cutoff_distribution.tsv  # These files are results taking into consideration of introgression among strains.
+│   ├── merge_betweengroup_pairwise_output.tsv
+│   ├── new_isotype_groups.tsv
+│   │ 
+│   │   # Pairwise disconcordance plots.
+│   └── pairwise
+│       ├── within_group         # Plot for each pairs of strains from the same isotypes. 
+│       │                        # So far any strain pairs with red bars (inconcordance above cutoff) has been assigned to different isotypes. 
+│       └── between_group        # Plot between strain pairs that meets Ye's criteria of introgression.
+│                                # If process strain_pairwise_list_N2 is used, this step only compare each strain with N2.
+│                                # If process strain_pairwise_list is used, this step compare every possible pair of strains.
+└── varition
+    └── out_gt.tsv               # this is created as input for scripts in "concordance-nf/manually_pairwise" folder.
 ```
-
-### Details on files above
-
-Below are details regarding some of the generated files above:
-
-#### concordance/
-
-__isotype_groups.tsv__
-
-|   group | strain   | isotype   |   coverage |   unique_isotypes_per_group | strain_conflicts   |
-|--------:|:---------|:----------|-----------:|----------------------------:|:-------------------|
-|       1 | AB1      | AB1       |    69.4687 |                           1 | FALSE              |
-|     112 | AB4      | CB4858    |   158.358  |                           1 | FALSE              |
-|     112 | ECA251   | CB4858    |    73.5843 |                           1 | FALSE              |
-|     112 | JU1960   | NA        |    55.0373 |                           1 | FALSE              |
-|     159 | BRC20067 | BRC20067  |    33.5934 |                           1 | FALSE              |
-|     159 | BRC20113 | NA        |    38.9916 |                           1 | FALSE              |
-
-The `isotype_groups.tsv` classifies the strains into isotypes. There may exist issues, however.
-
