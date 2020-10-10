@@ -13,9 +13,9 @@ stack_list <- function(x) {
 args <- commandArgs(trailingOnly=TRUE)
 
 # load bam coverage data
-SM_coverage <- read.delim(args[1], stringsAsFactors=FALSE) %>% rename(strain=Sample)
+SM_coverage <- read.delim(args[1], stringsAsFactors=FALSE) # %>% rename(strain=Sample)
 
-SM_coverage$coverage <- rowMeans(SM_coverage[,c("I", "II", "III", "IV", "V")], na.rm=TRUE)
+# SM_coverage$coverage <- rowMeans(SM_coverage[,c("I", "II", "III", "IV", "V")], na.rm=TRUE)
 
 SM_coverage <- select(SM_coverage, strain, coverage)
 
