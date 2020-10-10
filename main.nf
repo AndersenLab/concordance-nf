@@ -19,7 +19,8 @@ date = new Date().format( 'yyyyMMdd' )
 params.out = "concordance-${date}"
 params.debug = false
 params.help = false
-params.info_sheet = "${workflow.projectDir}/bin/C._elegans_WI_strain_info_20200715.tsv"
+params.info_sheet = "(required)"
+params.species == ""
 
 
 // Debug
@@ -62,8 +63,9 @@ nextflow main.nf -profile quest --vcf=a.vcf.gz --bam_coverage=mqc_mosdepth-cover
     --cores              Regular job cores                                                         ${params.cores}
     --out                Directory to output results                                               ${params.out}
     --vcf                Hard filtered vcf                                                         ${params.vcf}
-    --bam_coverage       Strain level mqc_mosdepth-coverage-per-contig_1.txt from alignment-nf     ${params.bam_coverage}
+    --bam_coverage       Table with "strain" and "coverage" as header                              ${params.bam_coverage}
     --info_sheet         Strain sheet containing exisiting isotype assignment                      ${params.info_sheet}
+    --species            'ce' will check for npr1. All other values will skip this                 ${params.species}
     --concordance_cutoff Cutoff of concordance value to count two strains as same isotype          ${params.concordance_cutoff}
 
     HELP: http://andersenlab.org/dry-guide/pipeline-concordance/
@@ -88,7 +90,16 @@ workflow {
     bam_coverage = Channel.fromPath("${params.bam_coverage}")
 
 
-    hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & query_between_group_pairwise_gt & npr1_allele_check & strain_pairwise_list_N2)
+if (params.species == "ce") {
+
+    hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & npr1_allele_check)
+
+} else {
+
+    hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck)
+
+}
+
 
     calculate_gtcheck.out.combine(bam_coverage) | process_concordance_results
 
@@ -96,14 +107,17 @@ workflow {
 
     generate_isotype_groups.out.splitText( by:1 ).combine(hard_filtered_vcf).combine(vcf_index) | within_group_pairwise // this is for strains of same isotype
 
-    strain_pairwise_list_N2.out.splitText( by:1 ).combine(query_between_group_pairwise_gt.out) | between_group_pairwise // this is for each pair of strains
 
-    between_group_pairwise.out.cutoff_distribution | cutoff_distribution
+//    hard_filtered_vcf.combine(vcf_index) | (query_between_group_pairwise_gt & strain_pairwise_list_N2)
 
-    between_group_pairwise.out.between_group_pairwise_out.toSortedList() | merge_betweengroup_pairwise_output
+//    strain_pairwise_list_N2.out.splitText( by:1 ).combine(query_between_group_pairwise_gt.out) | between_group_pairwise // this is for each pair of strains
+
+//    between_group_pairwise.out.cutoff_distribution | cutoff_distribution
+
+//    between_group_pairwise.out.between_group_pairwise_out.toSortedList() | merge_betweengroup_pairwise_output
 
 
-    process_concordance_results.out.isotype_groups_ch.combine(merge_betweengroup_pairwise_output.out).combine(npr1_allele_check.out) | combine_pairwise_results
+//    process_concordance_results.out.isotype_groups_ch.combine(merge_betweengroup_pairwise_output.out).combine(npr1_allele_check.out) | combine_pairwise_results
 
 }
 
