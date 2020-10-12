@@ -190,8 +190,7 @@ process within_group_pairwise {
         tuple val(pair_group), file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") //from filtered_vcf_pairwise
 
     output:
-        file("${group}.${isotype}.${pair.replace(",","_")}.png")
-    //    file("${group}.${isotype}.${pair.replace(",","_")}.tsv")
+        file("*.png")
 
     script:
         pair_group = pair_group.trim().split("\t")
@@ -201,9 +200,8 @@ process within_group_pairwise {
 
     """
         bcftools query -f '%CHROM\t%POS[\t%GT]\n' -s ${pair} concordance.vcf.gz > out.tsv
-        Rscript --vanilla ${workflow.projectDir}/bin/plot_pairwise.R
-        mv out.png ${group}.${isotype}.${pair.replace(",","_")}.png
-        mv out.tsv ${group}.${isotype}.${pair.replace(",","_")}.tsv
+        Rscript --vanilla ${workflow.projectDir}/bin/plot_pairwise.R ${pair} ${group} ${isotype}
+
     """
 }
 
