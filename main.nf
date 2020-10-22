@@ -135,7 +135,7 @@ process calculate_gtcheck {
 
     """
         echo -e "discordance\\tsites\\tavg_min_depth\\ti\\tj" > gtcheck.tsv
-        bcftools gtcheck -H -G 1 concordance.vcf.gz | egrep '^CN' | cut -f 2-6 >> gtcheck.tsv
+        bcftools view -i 'TYPE="snp"' -O u concordance.vcf.gz | bcftools gtcheck -H -G 1 | egrep '^CN' | cut -f 2-6 >> gtcheck.tsv
     """
 }
 
