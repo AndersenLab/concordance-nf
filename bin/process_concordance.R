@@ -28,6 +28,12 @@ existing_WI <- WI %>%
     dplyr::select(strain, isotype, latitude, longitude) %>%
     dplyr::filter(isotype != "NA")
 
+# check if any strains have an isotype existing (for new species)
+if(nrow(existing_WI) == 0) {
+    existing_WI <- WI %>%
+        dplyr::select(strain, isotype, latitude, longitude)
+}
+
 # define concordance cutoff for strains that belong to the same isotype
 cutoff <- as.numeric(args[3])
 
