@@ -65,7 +65,7 @@ nextflow main.nf -profile quest --vcf=a.vcf.gz --bam_coverage=mqc_mosdepth-cover
     --vcf                Hard filtered vcf                                                         ${params.vcf}
     --bam_coverage       Table with "strain" and "coverage" as header                              ${params.bam_coverage}
     --info_sheet         Strain sheet containing exisiting isotype assignment                      ${params.info_sheet}
-    --species            'ce' will check for npr1. All other values will skip this                 ${params.species}
+    --species            'c_elegans' will check for npr1. All other values will skip this          s${params.species}
     --concordance_cutoff Cutoff of concordance value to count two strains as same isotype          ${params.concordance_cutoff}
 
     HELP: http://andersenlab.org/dry-guide/pipeline-concordance/
@@ -90,7 +90,7 @@ workflow {
     bam_coverage = Channel.fromPath("${params.bam_coverage}")
 
 
-if (params.species == "ce") {
+if (params.species == "c_elegans") {
 
     hard_filtered_vcf.combine(vcf_index) | (calculate_gtcheck & npr1_allele_check)
 
