@@ -19,8 +19,9 @@ date = new Date().format( 'yyyyMMdd' )
 params.out = "concordance-${date}"
 params.debug = false
 params.help = false
-params.info_sheet = "(required)"
-params.species == ""
+//params.info_sheet = "(required)"
+params.species == "c_elegans"
+params.R_libpath = "/projects/b1059/software/R_lib_3.6.0"
 
 
 // Debug
@@ -33,6 +34,7 @@ if (params.debug == true) {
     params.vcf = "${workflow.projectDir}/test_data/concordance.test.vcf.gz"
     params.bam_coverage = "${workflow.projectDir}/test_data/SM_coverage.tsv"
     params.concordance_cutoff = 0.99
+    params.species = "c_elegans"
 
 } else {
     params.vcf = "(required)"
@@ -54,7 +56,7 @@ out = '''
 
 nextflow main.nf -profile quest --debug=true
 
-nextflow main.nf -profile quest --vcf=a.vcf.gz --bam_coverage=mqc_mosdepth-coverage-per-contig_1.txt
+nextflow main.nf -profile quest --vcf=a.vcf.gz --bam_coverage=mqc_mosdepth-coverage-per-contig_1.txt --info_sheet=WI_elegans.tsv
 
     parameters           description                                                               Set/Default
     ==========           ===========                                                               =======
@@ -85,6 +87,8 @@ if (params.help) {
 
 workflow {
 
+    get_species_sheet()
+
     hard_filtered_vcf = Channel.fromPath("${params.vcf}")
     vcf_index = Channel.fromPath("${params.vcf}.tbi") // make sure the index format is consistent in process inputs
     bam_coverage = Channel.fromPath("${params.bam_coverage}")
@@ -101,7 +105,8 @@ if (params.species == "c_elegans") {
 }
 
 
-    calculate_gtcheck.out.combine(bam_coverage) | process_concordance_results
+    calculate_gtcheck.out.combine(bam_coverage)
+        .combine(get_species_sheet.out) | process_concordance_results
 
     process_concordance_results.out.isotype_groups_ch | generate_isotype_groups
 
@@ -121,6 +126,23 @@ if (params.species == "c_elegans") {
 
 }
 
+
+process get_species_sheet {
+    
+    publishDir "${params.out}", mode: 'copy'
+
+    output:
+        file("*.tsv")
+
+    """
+    # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/download_google_sheet.R > download_google_sheet.R 
+
+    Rscript --vanilla download_google_sheet.R ${params.species}
+        
+    """
+
+}
 
 
 process calculate_gtcheck {
@@ -146,7 +168,7 @@ process process_concordance_results {
     publishDir "${params.out}/concordance", mode: "copy"
 
     input:
-        tuple file("gtcheck.tsv"), file("SM_coverage.tsv")
+        tuple file("gtcheck.tsv"), file("SM_coverage.tsv"), file("WI_info_sheet.tsv")
 
     output:
         file("concordance.pdf")
@@ -159,8 +181,11 @@ process process_concordance_results {
         file("problem_strains.tsv")
 
     """
+    # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/process_concordance.R > process_concordance.R 
+
     # Run concordance analysis
-    Rscript --vanilla ${workflow.projectDir}/bin/process_concordance.R SM_coverage.tsv ${params.info_sheet} ${params.concordance_cutoff}
+    Rscript --vanilla process_concordance.R SM_coverage.tsv WI_info_sheet.tsv ${params.concordance_cutoff}
     """
 }
 
@@ -199,8 +224,10 @@ process within_group_pairwise {
         isotype = pair_group[2]
 
     """
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/plot_pairwise.R > plot_pairwise.R 
+
         bcftools query -f '%CHROM\t%POS[\t%GT]\n' -s ${pair} concordance.vcf.gz > out.tsv
-        Rscript --vanilla ${workflow.projectDir}/bin/plot_pairwise.R ${pair} ${group} ${isotype}
+        Rscript --vanilla plot_pairwise.R ${pair} ${group} ${isotype}
 
     """
 }
@@ -295,9 +322,10 @@ process between_group_pairwise {
         sp1 = pair_group[0]
         sp2 = pair_group[1]
 
-    """            
+    """  
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/process_strain_pairwise.R > process_strain_pairwise.R           
         csvtk cut -t -f CHROM,POS,${sp1},${sp2} out_gt.tsv > ${sp1}-${sp2}.queried.tsv
-        Rscript --vanilla ${workflow.projectDir}/bin/process_strain_pairwise.R ${sp1} ${sp2} ${sp1}-${sp2}.queried.tsv
+        Rscript --vanilla process_strain_pairwise.R ${sp1} ${sp2} ${sp1}-${sp2}.queried.tsv
         mv condition_results.tsv ${sp1}-${sp2}.tsv
         mv for_distribution.tsv ${sp1}-${sp2}-distribution.tsv
         rm ${sp1}-${sp2}.queried.tsv
@@ -370,7 +398,8 @@ process combine_pairwise_results {
         file("new_isotype_groups.tsv")
 
     """
-        Rscript --vanilla ${workflow.projectDir}/bin/merge_groups_info.R isotype_groups.tsv merge_betweengroup_pairwise_output.tsv npr1_allele_strain.tsv
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/merge_groups_info.R > merge_groups_info.R           
+        Rscript --vanilla merge_groups_info.R isotype_groups.tsv merge_betweengroup_pairwise_output.tsv npr1_allele_strain.tsv
     """
 }
 
