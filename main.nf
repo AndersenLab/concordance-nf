@@ -71,6 +71,8 @@ nextflow main.nf -profile quest --vcf=a.vcf.gz --bam_coverage=mqc_mosdepth-cover
     --concordance_cutoff Cutoff of concordance value to count two strains as same isotype          ${params.concordance_cutoff}
 
     HELP: http://andersenlab.org/dry-guide/pipeline-concordance/
+    ----------------------------------------------------------------------------------------------------------------------------
+    Git info: $workflow.repository - $workflow.revision [$workflow.commitId]
 
 """
 out
