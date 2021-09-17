@@ -1,0 +1,587 @@
+---
+title: "Assign isotypes"
+author: Katie Evans
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+<br> 
+
+* Group strains into new isotype groups based on pairwise concordance score.
+* Match newly assigned groups to exisiting isotypes.
+* Resolve problems:
+    + whether any strains were assigned to > 1 new isotype groups
+    + whether any existing isotypes matched to > 1 new isotype groups
+    + whether any new group matched to > 1 old isotypes
+* Plot new concordance values (red-blue) and old concordance values (red-yellow)
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE, echo=FALSE)
+
+library(tidyverse)
+library(magrittr)
+library(DT)
+library(plotly)
+library(patchwork)
+library(ComplexHeatmap)
+library(circlize)
+library(geosphere)
+```
+
+```{r}
+
+##### UPDATE THESE PARAMETERS BEFORE RUNNING ######
+
+# old gtcheck from previous release - to see if isotype assignments changed
+gtcheck_old <- readr::read_tsv("~/Dropbox/AndersenLab/LabFolders/DanLu/4.concordance/20201010_CE/only_SNP_0.99938/gtcheck.tsv")
+
+# new gt check from concordance-nf
+gtcheck_new <- readr::read_tsv("gtcheck.tsv")
+
+# sample coverage data - sample sheet for GATK
+gatk_ss <- readr::read_tsv("~/Dropbox/AndersenLab/LabFolders/DanLu/3.GATK/20210105_all_CE/sample_sheet_GATK_20201230.tsv") 
+
+# existing isotype data - output from concordance (download google sheet for correct species)
+WI_sheet <- readr::read_tsv("C_elegans_WI_strain_info_20210115.tsv")
+
+# concordance cutoff value
+cutoff <- 0.9997
+
+```
+
+<br>
+
+```{r, echo=F}
+# define plot function
+concordance_heatmap <- function(strains, version) {
+    
+    if (length(strains) > 2) {
+        
+        if (version == "new") {
+            gtcheck_table <- gtcheck
+            color_discordance = "royalblue1"
+        }
+        
+        if (version == "old") {
+            gtcheck_table <- gtcheck_old
+            color_discordance = "yellow"
+        }
+        
+        df1 <- gtcheck_table %>%
+            dplyr::select(i, j, concordance) %>% 
+            dplyr::filter(i %in% strains & j %in% strains) %>% 
+            unique()
+        
+        df2 <- df1 %>% 
+            dplyr::rename(i=j, j=i)
+            
+        df <- dplyr::bind_rows(df1, df2) %>% 
+            unique() %>% 
+            tidyr::spread(j, concordance) 
+        
+        if (nrow(df) > 2) {   
+            
+            if (nrow(df) <= 10) { font_size = 12}
+            if (nrow(df) > 10 & nrow(df) < 15) { font_size = 10}
+            if (nrow(df) >= 15 & nrow(df) < 30) { font_size = 8}
+            if (nrow(df) >= 30 ) { font_size = 6}
+            
+            # make heatmap of concordance
+            m = select(df, -i) %>% as.matrix()
+            rownames(m) = df$i
+            
+            col_fun = circlize::colorRamp2(c(min(m, na.rm=T), max(m, na.rm=T)), c(color_discordance, "indianred1"))
+            
+            p  = ComplexHeatmap::Heatmap(m, col=col_fun, rect_gp = gpar(col = "white", lwd = 2), cell_fun = function(j, i, x, y, width, height, fill) {
+                grid.text(sprintf("%.5f", m[i, j]), x, y, gp = gpar(fontsize = font_size)) 
+            })
+            
+            print(p)
+        } else { print("Not more than 2 strains in group in this dataset")}
+        
+    } else { print("Not more than 2 strains in group in this dataset")}
+}
+
+```
+
+
+
+## Group strains based on concordance
+```{r}
+# Load previous gtcheck data for plotting and comparison
+gtcheck_old <- gtcheck_old %>%
+    dplyr::mutate(concordance = 1-(discordance/sites))
+
+# Load coverage data
+SM_coverage <- dplyr::select(gatk_ss, strain, coverage)
+
+# Load existing isotype data
+WI <- WI_sheet %>% 
+    dplyr::select("strain", "isotype", "release", "isotype_ref_strain", "wgs_seq")
+
+existing_isotype <- WI %>%
+    dplyr::select(strain, isotype) %>%
+    dplyr::filter(isotype != "NA") %>% unique()
+
+# Calculate concordance and determine whether a strain pair is isotype
+gtcheck <- gtcheck_new %>%
+    dplyr::mutate(concordance = 1-(discordance/sites)) %>%
+    dplyr::mutate(isotype = concordance > cutoff) 
+
+# Create table of strain pairs that are isotype with each other
+single_strains <- gtcheck %>%
+    dplyr::select(i, j, isotype) %>%
+    tidyr::gather(col, strain, -isotype) %>%
+    dplyr::group_by(strain) %>%
+    dplyr::summarise(single_strain = sum(isotype, na.rm = T)) %>% 
+    dplyr::filter(single_strain==0)
+
+single_strains <- as.data.frame(list(i = single_strains$strain,
+                                     j = single_strains$strain,
+                                     discordance = 0,
+                                     concordance = 1,
+                                     isotype = TRUE))
+
+iso_gtcheck <- dplyr::bind_rows(gtcheck, single_strains) %>% 
+    dplyr::filter(isotype == T)
+
+
+# Generate isotype groups:
+# For each strain, create a group that contains all strains that have "isotype==T" with this strain
+stack_list <- function(x) {
+    if (is.null(names(x)) == T) {
+        names(x) <- as.character(1:length(x))
+    }
+    stack(x)
+}
+
+strain_list <- sort(unique(c(gtcheck$i, gtcheck$j)))
+
+isotype_groups <- stack_list(unique(lapply(strain_list, function(x) {
+    grouped_strains <- dplyr::filter(iso_gtcheck, (i == x | j == x)) %>%
+        dplyr::select(i, j)
+    sort(unique(unlist(grouped_strains)))
+}))) %>%
+    dplyr::rename(strain = values, group = ind) %>%
+    dplyr::select(group, everything())
+
+
+```
+
+<br> 
+
+## Check whether any strains were assigned to > 1 new isotype groups
+```{r, fig.width=10, fig.height=8}
+nrow(isotype_groups)
+nrow(select(isotype_groups, strain) %>% unique())
+nrow(select(isotype_groups, group) %>% unique())
+
+multi = isotype_groups[duplicated(isotype_groups["strain"]) | duplicated(isotype_groups["strain"], fromLast = T), ]
+
+datatable(multi, options = list(pageLength = 50), rownames=F)
+
+# also look at all the strains these isotypes include
+multi_iso = filter(isotype_groups, group %in% multi$group)
+
+datatable(multi_iso, options = list(pageLength = 50), rownames=F)
+
+
+if (nrow(multi_iso) > 0) {
+    
+    concordance_heatmap(multi_iso$strain, "new")
+    concordance_heatmap(multi_iso$strain, "old")
+    
+}
+```
+
+<br>
+
+## Match existing isotypes to each new group 
+```{r, fig.width=10, fig.height=8}
+# Match new group to exisiting isotypes by strain name
+match_group_isotype <- dplyr::inner_join(isotype_groups, WI, by="strain") %>%  
+    dplyr::left_join(SM_coverage) 
+
+write.table(match_group_isotype, "isotype_group_match_0.9997.tsv", quote=F, sep="\t", col.names = T, row.names = F)
+
+# Create new isotype group - exisiting isotype conversion table
+match_group_isotype_unique <- dplyr::select(match_group_isotype, group, isotype) %>% 
+    dplyr::filter(!is.na(isotype)) %>% 
+    unique()
+
+```
+
+
+## Check whether any existing isotypes matched to > 1 new isotype groups
+```{r}
+multi2a = match_group_isotype_unique[ duplicated(match_group_isotype_unique$isotype) | duplicated(match_group_isotype_unique$isotype, fromLast = T), ]
+
+datatable(multi2a, options = list(pageLength = 50), rownames=F)
+```
+
+
+```{r, fig.width=10, fig.height=8}
+# plot
+for (multi_group in unique(multi2a$group)) {
+    
+    print(paste0("Group ", multi_group))
+    
+    strains_in_multi2 = filter(isotype_groups, group==multi_group)
+    
+    concordance_heatmap(strains_in_multi2$strain, "new")
+    concordance_heatmap(strains_in_multi2$strain, "old")
+    
+}
+```
+
+
+## Check whether any new group matched to > 1 old isotypes
+```{r}
+multi2 = match_group_isotype_unique[duplicated(match_group_isotype_unique["group"]) | duplicated(match_group_isotype_unique["group"], fromLast = T), ]
+
+datatable(multi2, options = list(pageLength = 50), rownames=F)
+```
+
+<br>
+
+```{r, fig.width=10, fig.height=8}
+
+# plot
+for (multi_group in unique(multi2$group)) {
+    
+    print(paste0("Group ", multi_group))
+    
+    strains_in_multi2 = filter(isotype_groups, group==multi_group)
+    
+    concordance_heatmap(strains_in_multi2$strain, "new")
+    concordance_heatmap(strains_in_multi2$strain, "old")
+    
+}
+```
+
+<br>
+
+### Plot ALL groups that match to > 1 old isotype
+```{r, fig.width=10, fig.height=8}
+strains_in_multi2 = filter(isotype_groups, group %in% multi2$group)
+
+concordance_heatmap(strains_in_multi2$strain, "new")
+concordance_heatmap(strains_in_multi2$strain, "old")
+
+```
+
+
+### Plot concordance in previous release of strains in these isotypes 
+The previous plot are subsetted by strains, and this one is subsetted by existing isotypes. The result may be the same set of strains. 
+```{r, fig.width=10, fig.height=8}
+# get strains among these problematic isotypes in previous release
+strains_in_multi2_isotypes = filter(WI, isotype %in% multi2$isotype)
+
+concordance_heatmap(strains_in_multi2_isotypes$strain, "old")
+
+```
+
+
+## Plot other groups in question. 
+Group that show introgression in within-group pairwise plots
+
+```{r, fig.width=10, fig.height=8}
+strains_in_multi2 = filter(isotype_groups, group=="")
+
+concordance_heatmap(strains_in_multi2$strain, "new")
+concordance_heatmap(strains_in_multi2$strain, "old")
+
+```
+
+
+<br>
+
+
+## Zoom in new concordance
+```{r}
+# gtcheck %>%
+#     # dplyr::filter(concordance < 0.9997) %>%
+#     dplyr::mutate(strain_pair = paste0(i, "-", j)) %>%
+#     ggplot(.) +
+#     geom_histogram(aes(x=concordance), binwidth = 0.00001, fill="#0080FF") +
+#     scale_x_continuous(limits = c(0.999, 1.0)) +
+#     labs(x = "Concordance", y = "Number of Comparisons") +
+#     geom_vline(aes(xintercept = cutoff), color = "red") +
+#     theme(axis.title = ggplot2::element_text(size=14, face="bold", color="black", vjust=5))
+
+test <- gtcheck %>%
+    dplyr::mutate(bin = NA)
+
+bins <- seq(0.999, 1.0, 0.00001)
+
+# first bin
+b <- bins[1]
+test$bin[which(test$concordance > b)] <- b
+for(i in 2:length(bins)) {
+    b <- bins[i]
+    # for each bin, which rows belong to that bin?
+    test$bin[which(test$concordance > b)] <- b
+}
+
+test2 <- test %>%
+    dplyr::mutate(strain_pair = glue::glue("{isotype}: {i}-{j} ({round(concordance, digits = 6)})")) %>%
+    dplyr::group_by(bin) %>%
+    dplyr::summarize(num = n(),
+                     strain_text = paste(strain_pair, collapse = "\n")) %>%
+    na.omit() %>%
+    ggplot(.) +
+    aes(x = bin, y = num) +
+    geom_bar(stat = "identity", fill = "#0080FF") +
+    labs(x = "Concordance", y = "Number of Comparisons") +
+    geom_vline(aes(xintercept = cutoff), color = "red") +
+    theme(axis.title = ggplot2::element_text(size=14, face="bold", color="black", vjust=5))
+
+plotly::ggplotly(test2 + aes(text = glue::glue("{strain_text}")), tooltip = "text")
+
+
+gtcheck %>% filter(isotype == TRUE) %>% 
+    left_join(match_group_isotype, by=c("i"="strain")) %>% 
+    left_join(match_group_isotype, by=c("j"="strain")) %>% 
+    select(i, j, sites, discordance, concordance, group.x, isotype.y, isotype, coverage.x) %>% 
+    mutate(coverage.x=as.integer(coverage.x)) %>%  
+    unique() %>% 
+    DT::datatable(colnames = c("Strain", "Strain", "Total variants", "Diff variants", "Concordance", "New isotype group", "i old isotype", "j old isotype", "Coverage"),
+                  rownames = F,
+                  options = list(pageLength = 50),
+                  filter = 'top') # use scroller may change how filter look. be careful
+```
+
+
+## Zoom in previous concordance
+```{r}
+# ggplot(gtcheck_old) +
+#     geom_histogram(aes(x=concordance), binwidth = 0.00001, fill="goldenrod") +
+#     scale_x_continuous(limits = c(0.999, 1.0)) +
+#     labs(x = "Concordance", y = "Number of Comparisons") +
+#     geom_vline(aes(xintercept = 0.9997), color = "red") +
+#     theme(axis.title = ggplot2::element_text(size=14, face="bold", color="black", vjust=5))
+
+test <- gtcheck_old %>%
+    dplyr::mutate(bin = NA)
+
+bins <- seq(0.999, 1.0, 0.00001)
+
+# first bin
+b <- bins[1]
+test$bin[which(test$concordance > b)] <- b
+for(i in 2:length(bins)) {
+    b <- bins[i]
+    # for each bin, which rows belong to that bin?
+    test$bin[which(test$concordance > b)] <- b
+}
+
+test2 <- test %>%
+    dplyr::left_join(WI %>% dplyr::select(strain, isotype), by = c("i" = "strain")) %>%
+    dplyr::left_join(WI %>% dplyr::select(strain, isotype), by = c("j" = "strain")) %>%
+    dplyr::mutate(isotype = isotype.x == isotype.y) %>%
+    dplyr::mutate(strain_pair = glue::glue("{isotype}: {i}-{j} ({round(concordance, digits = 6)})")) %>%
+    dplyr::group_by(bin) %>%
+    dplyr::summarize(num = n(),
+                     strain_text = paste(strain_pair, collapse = "\n")) %>%
+    na.omit() %>%
+    ggplot(.) +
+    geom_bar(aes(x = bin, y = num), stat = "identity", fill="goldenrod") +
+    labs(x = "Concordance", y = "Number of Comparisons") +
+    geom_vline(aes(xintercept = cutoff), color = "red") +
+    theme(axis.title = ggplot2::element_text(size=14, face="bold", color="black", vjust=5))
+
+plotly::ggplotly(test2 + aes(text = glue::glue("{strain_text}")), tooltip = "text")
+
+
+```
+
+<br> 
+
+## Check location distance within isotype groups
+```{r}
+wi_loc <- WI_sheet %>%
+    dplyr::select(strain, latitude, longitude)
+
+p1 <- gtcheck %>% 
+    dplyr::filter(concordance > 0.9992) %>% 
+    dplyr::inner_join(wi_loc, by=c("i"="strain")) %>% 
+    dplyr::inner_join(wi_loc, by=c("j"="strain")) %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(distance = geosphere::distm(c(longitude.x, latitude.x), c( longitude.y, latitude.y), fun = geosphere::distVincentyEllipsoid),
+                  distance = distance / 1000) %>% 
+    dplyr::mutate(label=paste0(i,"-",j)) %>% 
+    ggplot2::ggplot() + 
+        ggplot2::geom_point(aes(x=concordance, y=(distance+0.1), plotly_label=label, color = isotype), alpha=0.5, size=0.5) + 
+        ggplot2::theme_light() + 
+        ggplot2::ylab("Distance (km)") + 
+        ggplot2::scale_color_manual(values = c("black", "blue")) +
+        ggplot2::scale_y_continuous( labels = scales::comma, breaks = 10^seq(0 , 7, 1)) + 
+        ggplot2::scale_x_continuous(breaks=seq(0.9992, 1, 0.0001))
+
+ggplotly(p1, tooltip = "plotly_label")
+
+gtcheck %>% 
+    dplyr::filter(concordance > 0.9992) %>% 
+    dplyr::inner_join(wi_loc, by=c("i"="strain")) %>% 
+    dplyr::inner_join(wi_loc, by=c("j"="strain")) %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(distance = geosphere::distm(c(longitude.x, latitude.x), c( longitude.y, latitude.y), fun = geosphere::distVincentyEllipsoid),
+                  distance = distance / 1000) %>% 
+    dplyr::mutate(label=paste0(i,"-",j)) %>%
+    dplyr::select(strain1 = i, strain2 = j, concordance, isotype, `strain1 latitude` = latitude.x, `strain1 longitude` = longitude.x, `strain2 latitude` = latitude.y, `strain2 longitude` = longitude.y, `distance (km)` = distance) %>%
+    DT::datatable(rownames = F,
+                  options = list(pageLength = 50),
+                  filter = 'top') # use scroller may change how filter look. be careful
+
+# plot for each isotype group, max distance value
+test <- match_group_isotype %>% 
+    dplyr::inner_join(wi_loc, by=c("strain"="strain")) %>% 
+    dplyr::inner_join(wi_loc, by=c("isotype"="strain")) %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(distance = geosphere::distm(c(longitude.x, latitude.x), c( longitude.y, latitude.y), fun = geosphere::distVincentyEllipsoid),
+                  distance = distance / 1000) %>%
+    dplyr::group_by(isotype) %>%
+    dplyr::summarise(max_dist = max(distance),
+                     strains = paste(strain, collapse = "\n")) %>%
+    dplyr::arrange(desc(max_dist))
+test$isotype <- factor(test$isotype, levels = unique(test$isotype))
+
+summary(test$max_dist)
+
+p2 <- test %>%
+    dplyr::filter(max_dist > 1) %>%
+    ggplot2::ggplot() +
+    aes(x = isotype, y = max_dist) +
+    geom_bar(stat = "identity", fill = "navy") +
+    theme_bw(10) +
+    geom_hline(yintercept = 500, color = "red") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          panel.grid = element_blank()) +
+    labs(x = "Isotype", y = "Max strain distance (km)", title = "Isotype groups with at least one strain pair > 1 km distance")
+
+plotly::ggplotly(p2 + aes(text = glue::glue("{strains}")), tooltip = "text")
+
+
+```
+
+```{r}
+
+### might have to add some manual steps to remove and fix isotype groups
+
+```
+
+
+## Write output
+<br>
+
+### Assign isotypes to each strain
+```{r}
+# For all strains, reassign isotypes based on the group-isotype table generated above
+final_isotype0 <- match_group_isotype %>% 
+    dplyr::select(-isotype) %>%  # remove existing isotpyes 
+    dplyr::left_join(match_group_isotype_unique, by="group") # re-assign isotype by group
+
+ 
+# For strains that fall into groups with exisiting isotype reference strain, use that reference strain
+final_isotype_not_NA <- dplyr::filter(final_isotype0, !is.na(isotype)) %>%
+    dplyr::mutate(isotype_ref_strain = ifelse(is.na(isotype_ref_strain), FALSE, isotype_ref_strain)) 
+
+# For strains without exisiting isotypes, use the strain with most coverage as istoype name and reference strain
+final_isotype_NA <- dplyr::filter(final_isotype0, is.na(isotype)) %>%
+    dplyr::select(-isotype)
+
+NA_isotype <-  group_by(final_isotype_NA, group) %>%
+    dplyr::mutate(max_cov = max(coverage)) %>%
+    dplyr::filter(coverage==max_cov) %>% 
+    dplyr::select(group, strain)
+
+# Double check that each group only has 1 max coverage isotype
+nrow(NA_isotype) == nrow(select(NA_isotype, group) %>% unique())
+
+# Use the strain with max coverage as isotype name and ref strain
+NA_isotype %<>% rename(isotype=strain)
+
+final_isotype_NA %<>% left_join(NA_isotype, by="group") %>% dplyr::mutate(isotype_ref_strain = ifelse(strain==isotype, TRUE, FALSE))
+
+# Combine existing and newly assigned isotypes
+# remove 20201015 release date and change to 20210121
+final_isotype <- dplyr::bind_rows(final_isotype_not_NA, final_isotype_NA) %>%
+    dplyr::mutate(wgs_seq=TRUE) %>%
+    dplyr::mutate(release=ifelse(is.na(release), release_date, release),
+                  release = ifelse(release == "20201015", release_date, release)) %>%
+    dplyr::select(strain, isotype, everything()) %>%
+    dplyr::arrange(strain)
+
+# Double check the total number of groups and isotypes are as expected
+nrow(select(final_isotype, group) %>% unique) == nrow(select(final_isotype, isotype) %>% unique)
+```
+
+<br>
+
+
+### Strain and isotype count
+
+```{r}
+# Existing
+a <- select(final_isotype_not_NA, strain) %>% unique() %>% nrow()
+b <- select(final_isotype_not_NA, group) %>% unique() %>% nrow()
+
+print(paste0("Total of ", a, " strains assigned to ", b, " existing isotyes."))
+
+# New
+a <- select(final_isotype_NA, strain) %>% unique() %>% nrow()
+b <- select(final_isotype_NA, group) %>% unique() %>% nrow()
+
+print(paste0("Total of ", a, " strains assigned to ", b, " new isotyes."))
+```
+
+<br>
+
+### Check that each isotype has 1 and only 1 ref strain
+```{r}
+nrow(final_isotype %>% 
+    dplyr::group_by(isotype) %>% 
+    dplyr::summarise(num_of_ref=sum(isotype_ref_strain)) %>%
+    dplyr::filter(num_of_ref!=1)) == 0
+```
+
+<br>
+
+### Check that all fields in table is filled
+```{r}
+is.na(final_isotype) %>% sum() == 0
+```
+
+<br>
+
+### Final table
+```{r}
+datatable(final_isotype, rownames=F)
+```
+
+<br>
+
+### Write out for merging into C.elegans strain sheet
+```{r}
+final_isotype %<>% dplyr::select( -group, -coverage)
+
+write_tsv(final_isotype, "20210115_isotype_assignment.tsv")
+
+```
+
+
+
+### Write out list of isotype ref strains for subsetting
+```{r}
+final_isotype %>% 
+    dplyr::filter(isotype_ref_strain) %>% 
+    dplyr::select(strain) %>% 
+    dplyr::inner_join(gatk_ss) %>%  
+    readr::write_tsv("20210121_isotype_ref_strains.txt", col_names = F)
+```
+
+
+
+```{r}
+sessionInfo()
+```
