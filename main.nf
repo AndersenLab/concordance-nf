@@ -177,7 +177,8 @@ process process_concordance_results {
         file("concordance.png")
         file("xconcordance.pdf")
         file("xconcordance.png")
-        path "isotype_groups.tsv", emit: isotype_groups_ch
+        path "isotype_groups.tsv"
+        path "isotype_groups_new.tsv", emit: isotype_groups_ch
         file("isotype_count.txt")
         file("WI_metadata.tsv")
         file("problem_strains.tsv")
@@ -192,16 +193,17 @@ process process_concordance_results {
 }
 
 
+// update 20220202 - do we need ALL groups or just new ones?
 process generate_isotype_groups {
 
     input:
-        file("isotype_groups.tsv") //from isotype_groups
+        file("isotype_groups_new.tsv") //from isotype_groups
 
     output:
         file("pairwise_groups.txt") //into pairwise_groups
 
     """
-    cat isotype_groups.tsv | awk '{ curr_strain = \$2; curr_group = \$1; if (group_prev == curr_group) { print prev_strain "," curr_strain "\t" \$1 "\t" \$3 } ; prev_strain = \$2; group_prev = \$1; }' > pairwise_groups.txt
+    cat isotype_groups_new.tsv | awk '{ curr_strain = \$2; curr_group = \$1; if (group_prev == curr_group) { print prev_strain "," curr_strain "\t" \$1 "\t" \$3 } ; prev_strain = \$2; group_prev = \$1; }' > pairwise_groups.txt
     """
 
 }

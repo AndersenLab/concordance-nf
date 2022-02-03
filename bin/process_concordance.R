@@ -102,6 +102,15 @@ isotype_groups <- dplyr::left_join(isotype_groups, existing_WI, by = c("strain")
 # Save text files
 readr::write_tsv(isotype_groups, paste0("isotype_groups.tsv"))
 
+# for pairwise - only isotype groups with new strains
+groups <- isotype_groups %>%
+    dplyr::filter(is.na(isotype))
+
+new <- isotype_groups %>%
+    dplyr::filter(group %in% unique(groups$group))
+    
+readr::write_tsv(new, paste0("isotype_groups_new.tsv"))
+
 
 # Output problem strains
 pr_strains <- unique((isotype_groups %>% 

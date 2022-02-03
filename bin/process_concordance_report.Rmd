@@ -33,16 +33,16 @@ library(geosphere)
 ##### UPDATE THESE PARAMETERS BEFORE RUNNING ######
 
 # old gtcheck from previous release - to see if isotype assignments changed
-gtcheck_old <- readr::read_tsv("~/Dropbox/AndersenLab/LabFolders/DanLu/4.concordance/20201010_CE/only_SNP_0.99938/gtcheck.tsv")
+gtcheck_old <- readr::read_tsv("20210121_gtcheck.tsv")
 
 # new gt check from concordance-nf
-gtcheck_new <- readr::read_tsv("gtcheck.tsv")
+gtcheck_new <- readr::read_tsv("concordance/gtcheck.tsv")
 
 # sample coverage data - sample sheet for GATK
-gatk_ss <- readr::read_tsv("~/Dropbox/AndersenLab/LabFolders/DanLu/3.GATK/20210105_all_CE/sample_sheet_GATK_20201230.tsv") 
+gatk_ss <- readr::read_tsv("/projects/b1059/analysis/wi-gatk/WI-20220125/sample_sheet_gatk_20210119.tsv") 
 
 # existing isotype data - output from concordance (download google sheet for correct species)
-WI_sheet <- readr::read_tsv("C_elegans_WI_strain_info_20210115.tsv")
+WI_sheet <- readr::read_tsv("c_elegans_species_sheet_2022-02-01.tsv")
 
 # concordance cutoff value
 cutoff <- 0.9997
