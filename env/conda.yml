@@ -1,0 +1,10 @@
+name: concordance
+channels:
+- r
+- defaults
+- conda-forge
+- bioconda
+dependencies:
+  - bcftools=1.9
+  - csvtk=0.16.0
+  - r-gsheet

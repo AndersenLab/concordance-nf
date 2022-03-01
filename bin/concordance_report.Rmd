@@ -1,0 +1,233 @@
+---
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    theme: yeti
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, echo=F, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(knitr)
+library(DT)
+library(plotly)
+library(glue)
+library(patchwork)
+library(ComplexHeatmap)
+library(circlize)
+
+opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE, print=FALSE, verbose=TRUE)
+
+presentation <- theme(axis.text.x = element_text(size=10, face="bold", color="black"),
+                      axis.text.y = element_text(size=10, face="bold", color="black"),
+                      axis.title.x = element_text(size=14, face="bold", color="black", vjust=-1),
+                      axis.title.y = element_text(size=14, face="bold", color="black", vjust=2),
+                      strip.text.x = element_text(size=12, face="bold", color="black"),
+                      strip.text.y = element_text(size=12, face="bold", color="black"),
+                      panel.spacing = unit(0.50, "lines"),
+                      plot.margin  = unit(c(0.8,0.8,0.8,0.8), "cm"),
+                      plot.title   = element_text(size=24, face="bold",vjust=2),
+                      legend.position="none")
+
+wd <- "~/Dropbox/AndersenLab/CeNDR/Data_processing/20210121/all_reports/concordance/"
+
+
+```
+
+
+```{r}
+isotype <- read.delim(glue::glue("{wd}/20210115_isotype_assignment.tsv"), stringsAsFactors=FALSE)
+
+## this skips the 20201015 release, so previous release was 20200815 with 399 isotypes
+prev_isotype <- isotype %>%
+    dplyr::filter(strain == "ECA1206" | release != 20210121) # manually add ECA1206 to "old" isotypes because it is the clean version of an old isotype ECA2678
+new_strain <- isotype %>%
+    dplyr::filter(release == 20210121, strain != "ECA1206") 
+new_isotype <- new_strain %>%
+    dplyr::filter(!isotype %in% prev_isotype$isotype)
+
+# old isotype
+old_iso <- readr::read_tsv("~/Dropbox/AndersenLab/CeNDR/Data_processing/20200815/all_reports/concordance/20200810_isotype_assignment.tsv")
+
+p_i <- nrow(dplyr::select(prev_isotype, isotype) %>% unique)
+p_s <- nrow(dplyr::select(prev_isotype, strain))
+
+n_i <- nrow(dplyr::select(new_isotype, isotype) %>% unique)
+n_s <- nrow(dplyr::select(new_strain, strain))
+
+
+```
+
+## Overview
+
+Concordance analysis allows us to group strains that are genetically almost identical into an isotype. The following table summarizes the number of isotypes from previous and current releases, and the number of strains that belong to those isotypes. 
+
+|                 | __Isotypes__ | __Strains Included__ | __Strains with WGS data__ | __Strains with RAD-seq data__ |
+|-----------------|----------|---------|----------|---------|
+| __Isotypes from Previous Release__ | `r p_i`* | `r p_s  + 140` | `r p_s` | 140 |
+| __New Isotypes from Current Release__    | `r n_i` | `r n_s` | `r n_s` | 0 |
+| __Total__        | `r sum(p_i, n_i)` | `r sum(p_s, n_s, 140)` | `r sum(p_s, n_s)` | 140 |
+*Four strains were reduced to a single isotype group so this number was reduced from 403 to 400 (see below for details)
+
+<br>
+
+## Concordance score distribution and cutoff
+
+We examined the pairwise concordance scores of all strains. Concordance values for every pair of strains were calculated as the number of shared variant sites divided by the total number of variants called for each pair. If the concordance score was more than 0.9997, the strain pair is grouped into the same isotype.
+
+```{r load, fig.width=10, fig.height=4}
+cutoff <- 0.9997
+
+gtcheck <- readr::read_tsv(glue::glue("{wd}/gtcheck.tsv")) %>%
+    dplyr::mutate(concordance = 1-(discordance/sites)) %>%
+    dplyr::mutate(isotype = concordance > cutoff) 
+
+p1 <- ggplot(gtcheck) +
+  geom_histogram(aes(x=concordance, fill = isotype), binwidth = 0.00025) +
+  scale_fill_manual(values = c("#808080", "#0080FF")) + 
+    labs(x = "Concordance", y = "Number of Comparisons") +
+    theme_bw() +
+    presentation 
+
+
+p2 <- ggplot() +
+    geom_histogram(data=gtcheck, aes(x=concordance, fill = isotype), binwidth = 0.000025) +     
+    geom_rect(aes(xmax=1.0, xmin=cutoff, ymin=-Inf, ymax=Inf), fill="blue", alpha=0.2) +
+    geom_text(aes(x = Inf, y = Inf, label="the same isotype"),
+              vjust = 3, hjust = 1.4, colour="blue", size = 5) + 
+    scale_fill_manual(values = c("#808080", "#0080FF")) +
+    scale_x_continuous(limits = c(0.999, 1.0)) +
+    labs(x = "Concordance", y = "Number of Comparisons") +
+    theme_bw() +
+    presentation 
+
+p1+p2
+```
+
+<br>
+
+## Search for concordance for strain pairs
+
+Strain comparisons are listed in the table below. Only concordance scores > 0.999 are shown.
+
+```{r}
+
+# edit ECA2649 group by hand
+gtcheck %>%
+    dplyr::select(i, j, sites, discordance, concordance, isotype) %>% 
+    dplyr::filter(concordance > 0.999) %>% 
+    dplyr::mutate(isotype = ifelse(i == "ECA2649" & j %in% paste0("ECA", c(2657, 2608, 2585, 2672, 2552, 2548)), FALSE, isotype),
+                  isotype = ifelse(j == "ECA2649" & j %in% paste0("ECA", c(2657, 2608, 2585, 2672, 2552, 2548)), FALSE, isotype)) %>% 
+    DT::datatable(colnames = c("Strain", "Strain", "Total variants", "Diff variants", "Concordance", "Is isotype"),
+              rownames = F,
+              options = list(pageLength = 5, columnDefs = list(list(targets = c(2, 3, 4, 5), searchable = FALSE)))) # scroller view may change how filter look. be careful
+```
+
+<br>
+
+* ECA2649 had high concordance to two distinct isotype groups. However, upon investigating the relationships to each group, we chose to manually place ECA2649 with isotype ECA2551, not ECA2672.
+
+```{r, fig.width = 8, fig.height = 6}
+group_ECA2649 <- filter(isotype, isotype %in% c("ECA2551","ECA2672"))
+    
+df1 <- gtcheck %>%
+    dplyr::select(i, j, concordance) %>% 
+    dplyr::filter(i %in% group_ECA2649$strain & j %in% group_ECA2649$strain)
+
+df2 <- df1 %>% 
+    dplyr::rename(i=j, j=i)
+
+df <- dplyr::bind_rows(df1, df2) %>% 
+    unique() %>% 
+    tidyr::spread(j, concordance) 
+
+# make heatmap of concordance
+m = dplyr::select(df, -i) %>% 
+    as.matrix()
+rownames(m) = df$i
+
+col_fun = colorRamp2(c(min(m, na.rm=T), max(m, na.rm=T)), c("royalblue1", "indianred1"))
+
+ComplexHeatmap::Heatmap(m, col=col_fun, rect_gp = gpar(col = "white", lwd = 2), cell_fun = function(j, i, x, y, width, height, fill) {
+        grid.text(sprintf("%.4f", m[i, j]), x, y, gp = gpar(fontsize = 8)) 
+})
+```
+
+
+## Changes from previous release
+
+<br>
+
+* This release used only SNVs for isotype assignment.
+
+* Four strains (ECA2677, ECA2678, ECA2679, and ECA2686) were removed because they were frozen as "dirty" strains and have now been cleaned, frozen, and re-sequenced. Because these four strains were isotype reference strains, a new isotype reference strain was assigned. It appears that the other six strains in these isotype groups changed isotypes, but they remain in the same group as before with a new, clean isotype reference strain. Details can be found below.
+
+<br>
+
+| __Dirty Strain (Old)__ | __Clean Strain (New)__ | __Previous Isotype__ | __New Isotype__ | __Other Strains in Isotype Group__ |
+|-----------------|----------|---------|----------|---------|
+| ECA2677 | ECA1202 | ECA2677 | ECA1202 | ECA1201 |
+| ECA2678 | ECA1206 | ECA2678 | ECA1206 | ECA1973, ECA1979, ECA1983 |
+| ECA2679 | ECA1211 | ECA2679 | ECA1212 | ECA1209, ECA1211 |
+| ECA2686 | NA* | ECA2686 | ECA1243 | NA |
+*Clean strain for ECA2686 is ECA2803 but has not been sequenced yet.
+
+
+```{r}
+
+## no need to run heatmap on these strains
+
+# we also removed ECA1719 because it was a dirty strain, but this was not a previous strain so no need to report. Also ECA2796 is "N2" (npr-1 check)
+
+```
+
+<br>
+
+* Strains ECA1465, ECA1467, ECA1493, ECA1515 were each their own isotype in 20200815 release. They were grouped into the same isotype in this release, which resulted in a reduce of count of previous isotypes from 403 to 400. Below is their pairwise concordance value in this release (top) and in 20200815 release (bottom).
+
+<br>
+
+```{r, fig.height=4}
+group_ECA1493 <- filter(isotype, isotype %in% c("ECA1465", "ECA1467", "ECA1493", "ECA1515"))
+    
+df1 <- select(gtcheck, i, j, concordance) %>% filter(i %in% group_ECA1493$strain & j %in% group_ECA1493$strain)
+
+df2 <- df1 %>% rename(i=j, j=i)
+
+df = bind_rows(df1, df2) %>% unique() %>% spread(j, concordance) 
+
+# make heatmap of concordance
+m = select(df, -i) %>% as.matrix()
+rownames(m) = df$i
+
+col_fun = colorRamp2(c(min(m, na.rm=T), max(m, na.rm=T)), c("royalblue1", "indianred1"))
+
+Heatmap(m, col=col_fun, rect_gp = gpar(col = "white", lwd = 2), cell_fun = function(j, i, x, y, width, height, fill) {
+        grid.text(sprintf("%.4f", m[i, j]), x, y, gp = gpar(fontsize = 10)) 
+})
+```
+
+<br>
+
+```{r, fig.height=4}
+gtcheck_old <- readr::read_tsv("~/Dropbox/AndersenLab/CeNDR/Data_processing/20200815/4.concordance/gtcheck.tsv") %>%
+    dplyr::mutate(concordance = 1-(discordance/sites))
+
+df1 <- select(gtcheck_old, i, j, concordance) %>% filter(i %in% group_ECA1493$strain & j %in% group_ECA1493$strain)
+
+df2 <- df1 %>% rename(i=j, j=i)
+
+df = bind_rows(df1, df2) %>% unique() %>% spread(j, concordance) 
+
+# make heatmap of concordance
+m = select(df, -i) %>% as.matrix()
+rownames(m) = df$i
+
+col_fun = colorRamp2(c(min(m, na.rm=T), max(m, na.rm=T)), c("yellow", "indianred1"))
+
+Heatmap(m, col=col_fun, rect_gp = gpar(col = "white", lwd = 2), cell_fun = function(j, i, x, y, width, height, fill) {
+        grid.text(sprintf("%.4f", m[i, j]), x, y, gp = gpar(fontsize = 10)) 
+})
+```
