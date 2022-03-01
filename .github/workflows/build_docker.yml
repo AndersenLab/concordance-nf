@@ -6,6 +6,7 @@ on:
     paths:
     - 'env/concordance.Dockerfile'
     - '.github/workflows/build_docker.yml'
+    - 'env/conda.yml'
   pull_request:
     paths:
     - 'env/concordance.Dockerfile'
@@ -29,4 +30,4 @@ jobs:
         dockerfile: concordance.Dockerfile
         workdir: "env"
         tags: "latest"
-        cache: true 
+        cache: true
