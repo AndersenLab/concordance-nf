@@ -1,7 +1,9 @@
 library(ape)
 library(ggmap)
 library(phyloseq)
-library(tidyverse)
+library(dplyr)
+library(ggplot2)
+# library(tidyverse)
 
 contig = commandArgs(trailingOnly=TRUE)[[1]]
 tree <- ape::read.tree(paste0(contig,".tree"))

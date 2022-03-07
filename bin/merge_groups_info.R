@@ -1,5 +1,8 @@
 #!/usr/bin/env Rscript
-library(tidyverse)
+# library(tidyverse)
+library(readr)
+library(dplyr)
+library(tidyr)
 # Read data from Rscript input
 args <- commandArgs(trailingOnly=TRUE)
 

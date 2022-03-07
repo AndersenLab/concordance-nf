@@ -1,6 +1,9 @@
 #!/usr/bin/env Rscript
 library(ggplot2)
-library(tidyverse)
+library(readr)
+library(dplyr)
+library(tidyr)
+# library(tidyverse)
 # Read data from Rscript input
 args <- commandArgs(trailingOnly=TRUE)
 

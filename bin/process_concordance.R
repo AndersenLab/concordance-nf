@@ -1,6 +1,9 @@
 #!/usr/bin/env Rscript
 library(ggplot2)
-library(tidyverse)
+library(dplyr)
+library(readr)
+library(tidyr)
+# library(tidyverse)
 
 # Used in calculating isotypes
 stack_list <- function(x) {
