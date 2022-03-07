@@ -18,7 +18,11 @@ output: html_document
 ```{r global_options, include=FALSE}
 knitr::opts_chunk$set(warning=FALSE, message=FALSE, echo=FALSE)
 
-library(tidyverse)
+# library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(tidyr)
 library(magrittr)
 library(DT)
 library(plotly)
