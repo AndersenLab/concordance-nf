@@ -206,7 +206,7 @@ if (nrow(multi_iso) > 0) {
 match_group_isotype <- dplyr::inner_join(isotype_groups, WI, by="strain") %>%  
     dplyr::left_join(SM_coverage) 
 
-write.table(match_group_isotype, "isotype_group_match_0.9997.tsv", quote=F, sep="\t", col.names = T, row.names = F)
+write.table(match_group_isotype, glue::glue("isotype_group_match_{cutoff}.tsv"), quote=F, sep="\t", col.names = T, row.names = F)
 
 # Create new isotype group - exisiting isotype conversion table
 match_group_isotype_unique <- dplyr::select(match_group_isotype, group, isotype) %>% 
