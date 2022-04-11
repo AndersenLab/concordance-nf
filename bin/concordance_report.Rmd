@@ -114,12 +114,33 @@ Strain comparisons are listed in the table below. Only concordance scores > 0.99
 
 ```{r}
 
-# edit ECA2649 group by hand
-gtcheck %>%
+# instead of relying on gtcheck, do a check against the isotype table -- ECA2649 was split from two groups into just one
+test <- gtcheck %>%
     dplyr::select(i, j, sites, discordance, concordance, isotype) %>% 
-    dplyr::filter(concordance > 0.999) %>% 
-    dplyr::mutate(isotype = ifelse(i == "ECA2649" & j %in% paste0("ECA", c(2657, 2608, 2585, 2672, 2552, 2548)), FALSE, isotype),
-                  isotype = ifelse(j == "ECA2649" & j %in% paste0("ECA", c(2657, 2608, 2585, 2672, 2552, 2548)), FALSE, isotype)) %>% 
+    dplyr::filter(concordance > 0.999)%>%
+    dplyr::mutate(iso_check = NA)
+
+for(row in 1:nrow(test)) {
+    strain1 <- test$i[row]
+    strain2 <- test$j[row]
+    
+    iso <- isotype %>%
+        dplyr::filter(strain == strain1) %>%
+        dplyr::pull(isotype)
+    
+    isogroup <- isotype %>%
+        dplyr::filter(isotype == iso) %>%
+        dplyr::pull(strain)
+    
+    if(strain2 %in% isogroup) {
+        test$iso_check[row] <- TRUE
+    } else {
+        test$iso_check[row] <- FALSE
+    }
+}
+
+test %>%
+    dplyr::select(i, j, sites, discordance, concordance, iso_check) %>%
     DT::datatable(colnames = c("Strain", "Strain", "Total variants", "Diff variants", "Concordance", "Is isotype"),
               rownames = F,
               options = list(pageLength = 5, columnDefs = list(list(targets = c(2, 3, 4, 5), searchable = FALSE)))) # scroller view may change how filter look. be careful
