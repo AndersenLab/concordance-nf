@@ -1,0 +1,64 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "$id": "https://raw.githubusercontent.com/./master/nextflow_schema.json",
+    "title": "concordance-nf pipeline parameters",
+    "description": "",
+    "type": "object",
+    "definitions": {
+        "input_output": {
+            "title": "Input/Output",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "properties": {
+                "output": {
+                    "type": "string",
+                    "default": "Concordance_Results"
+                },
+                "vcf": {
+                    "type": "string"
+                },
+                "bam_coverage": {
+                    "type": "string"
+                }
+            }
+        },
+        "parameters": {
+            "title": "Parameters",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "properties": {
+                "species": {
+                    "type": "string",
+                    "enum": [
+                        "c_elegans",
+                        "c_briggsae",
+                        "c_tropicalis"
+                    ],
+                    "default": "c_elegans"
+                },
+                "concordance_cutoff": {
+                    "type": "string"
+                },
+                "debug": {
+                    "type": "boolean",
+                    "description": "run pipeline in debug mode",
+                    "default": true,
+                    "hidden": true
+                }
+            },
+            "required": [
+                "species"
+            ]
+        }
+    },
+    "allOf": [
+        {
+            "$ref": "#/definitions/input_output"
+        },
+        {
+            "$ref": "#/definitions/parameters"
+        }
+    ]
+}

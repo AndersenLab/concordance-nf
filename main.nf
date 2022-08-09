@@ -6,7 +6,7 @@
  * - Dan Lu <dan.lu@northwestern.edu>
  */
 
-nextflow.preview.dsl=2
+nextflow.enable.dsl=2
 // For now, this pipeline requires NXF_VER >= 20.01.0
 
 /* 
