@@ -44,7 +44,7 @@
                 "debug": {
                     "type": "boolean",
                     "description": "run pipeline in debug mode",
-                    "default": true,
+                    "default": false,
                     "hidden": true
                 }
             },
