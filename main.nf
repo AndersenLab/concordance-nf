@@ -30,7 +30,6 @@ if (params.debug == true) {
     params.vcf = "${workflow.projectDir}/test_data/concordance.test.vcf.gz"
     params.bam_coverage = "${workflow.projectDir}/test_data/SM_coverage.tsv"
     params.concordance_cutoff = 0.99
-    params.species = "c_elegans"
 
 } else {
     params.vcf = "(required)"
