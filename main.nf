@@ -17,7 +17,7 @@ nextflow.enable.dsl=2
 
 date = new Date().format( 'yyyyMMdd' )
 params.out = "concordance-${date}"
-params.species == "c_elegans"
+params.species = "c_elegans"
 
 
 // Debug
@@ -38,8 +38,6 @@ if (params.debug == true) {
     params.concordance_cutoff = 0.9995
 }
 
-
-
 def log_summary() {
 
 out = '''
@@ -58,11 +56,9 @@ nextflow main.nf -profile quest --vcf=a.vcf.gz --bam_coverage=mqc_mosdepth-cover
     ==========           ===========                                                               =======
 
     --debug              Set to 'true' to test                                                     ${params.debug}
-    --cores              Regular job cores                                                         ${params.cores}
     --out                Directory to output results                                               ${params.out}
     --vcf                Hard filtered vcf                                                         ${params.vcf}
     --bam_coverage       Table with "strain" and "coverage" as header                              ${params.bam_coverage}
-    --info_sheet         Strain sheet containing exisiting isotype assignment                      ${params.info_sheet}
     --species            'c_elegans' will check for npr1. All other values will skip this          ${params.species}
     --concordance_cutoff Cutoff of concordance value to count two strains as same isotype          ${params.concordance_cutoff}
 
