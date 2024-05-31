@@ -6,8 +6,8 @@
  * - Dan Lu <dan.lu@northwestern.edu>
  */
 
-nextflow.preview.dsl=2
-// For now, this pipeline requires NXF_VER >= 20.01.0
+nextflow.enable.dsl=2
+// For now, this pipeline requires NXF_VER >= 23.0
 
 /* 
     ======
@@ -17,8 +17,6 @@ nextflow.preview.dsl=2
 
 date = new Date().format( 'yyyyMMdd' )
 params.out = "concordance-${date}"
-params.debug = false
-params.help = false
 params.species == "c_elegans"
 
 
@@ -65,7 +63,7 @@ nextflow main.nf -profile quest --vcf=a.vcf.gz --bam_coverage=mqc_mosdepth-cover
     --vcf                Hard filtered vcf                                                         ${params.vcf}
     --bam_coverage       Table with "strain" and "coverage" as header                              ${params.bam_coverage}
     --info_sheet         Strain sheet containing exisiting isotype assignment                      ${params.info_sheet}
-    --species            'c_elegans' will check for npr1. All other values will skip this          s${params.species}
+    --species            'c_elegans' will check for npr1. All other values will skip this          ${params.species}
     --concordance_cutoff Cutoff of concordance value to count two strains as same isotype          ${params.concordance_cutoff}
 
     HELP: http://andersenlab.org/dry-guide/pipeline-concordance/
@@ -131,6 +129,8 @@ workflow {
 
 process get_species_sheet {
     
+    label 'xs'
+
     publishDir "${params.out}", mode: 'copy'
 
     output:
@@ -145,6 +145,8 @@ process get_species_sheet {
 
 
 process calculate_gtcheck {
+
+    label 'xs'
 
     publishDir "${params.out}/concordance", mode: 'copy'
 
@@ -163,6 +165,8 @@ process calculate_gtcheck {
 
 
 process process_concordance_results {
+
+    label 'xs'
 
     publishDir "${params.out}/concordance", mode: "copy"
 
@@ -190,6 +194,9 @@ process process_concordance_results {
 // update 20220202 - do we need ALL groups or just new ones?
 process generate_isotype_groups {
 
+    executor 'local'
+    container null
+
     input:
         file("isotype_groups_new.tsv") //from isotype_groups
 
@@ -204,6 +211,8 @@ process generate_isotype_groups {
 
 
 process within_group_pairwise {
+
+    label 'xs'
 
     publishDir "${params.out}/concordance/pairwise/within_group", mode: 'copy', overwrite: true
 
@@ -255,36 +264,11 @@ process strain_pairwise_list_N2 {
 }
 
 
-
-process strain_pairwise_list {
-
-    executor 'local'
-
-    publishDir "${params.out}/concordance/pairwise/between_strains", mode: "copy"
-
-    input:
-        tuple file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi")
-
-    output:
-        path("strain_pairwise_list.tsv")//into strain_pairwise
-
-    """
-        # generate strain level pairwise comparison list
-        bcftools query -l concordance.vcf.gz | grep -v "^N2\$" > raw_strain.tsv
-
-        for i in `cat raw_strain.tsv` ; do
-            echo \${i}-N2
-        done | tr "-" "\t" > strain_pairwise_list.tsv
-    """
-}
-
-
-
 process query_between_group_pairwise_gt {
 
     publishDir "${params.out}/variation", mode: 'copy', overwrite: true
 
-    cpus params.cores
+    label 'md'
 
     input:
         tuple file("concordance.vcf.gz"), file("concordance.vcf.gz.tbi") 
@@ -303,6 +287,8 @@ process between_group_pairwise {
     publishDir "${params.out}/concordance/pairwise/between_group", mode: 'copy', overwrite: true, pattern: '*.png'
 
     tag "${sp1}_${sp2}"
+
+    label 'xs'
 
     input:
         tuple val(pair_group), file("out_gt.tsv") 
@@ -348,6 +334,9 @@ process between_group_pairwise {
 
 process merge_betweengroup_pairwise_output {
 
+    executor 'local'
+    container null
+
     publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
 
     input:
@@ -365,6 +354,9 @@ process merge_betweengroup_pairwise_output {
 }
 
 process cutoff_distribution {
+
+    executor 'local'
+    container null
 
     publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
 
@@ -384,6 +376,8 @@ process cutoff_distribution {
 }
 
 process combine_pairwise_results {
+
+    label 'xs'
 
     publishDir "${params.out}/concordance", mode: 'copy', overwrite: true
 
