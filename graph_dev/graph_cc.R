@@ -124,12 +124,19 @@ induceNS <- function(graphL) {
 
 setwd("/vast/eande106/projects/Nicolas/github/concordance-nf/graph_dev/")
 #read gtcheck (pairwise concordance) file
+
+#briggsae
+#pwcc <- readr::read_tsv("/vast/eande106/projects/Nicolas/collabs/forNikita/graph_analysis/gtcheck.tsv") %>%
+#elegans
 pwcc <- readr::read_tsv("raw_data/elegans/gtcheck.tsv") %>%
   dplyr::mutate(concordance=(sites-discordance)/sites) %>%
   dplyr::mutate(discordant=discordance) %>%
   dplyr::mutate(discordance=discordant/sites)
 
 #get sampling metadata from species sheet
+#briggsae
+#winfo <- readr::read_tsv("/vast/eande106/projects/Nikita/c_briggsae/cbriggsae_popgen/raw_data/c_briggsae_species_sheet_2024-01-29.tsv") %>%
+#elegans
 winfo <- readr::read_tsv("raw_data/elegans/c_elegans_species_sheet_2024-02-17.tsv") %>%
   dplyr::select(strain,latitude,longitude,source_lab,sampling_date)
 
@@ -179,35 +186,44 @@ plot(c,g,layout=layout_with_mds,mark.border="black",mark.col="pink",vertex.size=
 
 #decompose subcomunities into list of graphs
 gd <- decompose(g)
-length(gd)
+#length(gd)
 
 #empty list and counter
 dfl <- list()
 rell <- list()
-k=1
 #loop through list of subcommunities, normalise weight, replace weights of 0 with 2nd minimum weight
 #subcommunity data frames are stored in 'dfl'
 #subcommunity graphs are stored in 'rell' (1-vertex subcommunities are NULL)
 for (i in 1:length(gd)) {
+  print(i)
   names <- vertex.attributes(gd[[i]])$name
   count <- length(names)
   tmpdf <- data.frame(members=paste(names,collapse = ","),nmem=count,gnum=i)
   dfl[[i]] <- tmpdf
   if (count>1) {
+    print(count)
     tmptbl <- rels %>% 
       dplyr::filter((from %in% names) & (to %in% names)) %>%
       dplyr::mutate(concordance=weight) %>%
-      #dplyr::mutate(weight=((weight-min(weight))/(max(weight)-min(weight)))+0.00000001)
       dplyr::mutate(weight=((weight-min(weight))/(max(weight)-min(weight)))) %>%
       dplyr::mutate(weight=ifelse(weight==0,nth(weight,2,order_by = weight),weight))
-      #dplyr::mutate(weight=(weight/min(weight)))
-      #dplyr::mutate(weight=(weight/max(weight)))
-      #dplyr::mutate(weight=((weight/min(weight)))+0.000001-1) 
     tmpverts<-unique(c(tmptbl$from,tmptbl$to)) 
     rell[[i]] <- graph_from_data_frame(tmptbl, directed=F, vertices=tmpverts)
-    k=k+1
+  } else {
+    rell[[i]] <- NA
   }
 }
+
+dfl_all <- ldply(dfl,data.frame)
+singles <- dfl_all %>% dplyr::filter(nmem==1)
+# groups <- list()
+# for (i in 1:length(gd)) {
+#   groups[[i]] <-data.frame(group=i,members= V(gd[[i]])$name)
+# }
+# groups_tbl <- ldply(groups,data.frame)
+# 
+# write.table(groups_tbl,'/vast/eande106/projects/Nicolas/github/concordance-nf/graph_dev/processed_data/c_briggsae_groups_pass1.tsv', quote = FALSE)
+#save.image("/vast/eande106/projects/Nicolas/github/concordance-nf/graph_dev/processed_data/c_briggsae_env.Rda")
 
 
 #search for substructure across isotypes using cluster_edge_betweeness()
@@ -216,16 +232,19 @@ glist_eb<- list()
 cc <- list()
 ##iterate through graphs 
 for (i in 1:length(rell)) {
-  #print progress
-  #print((i/length(rell))*100)
-  sg <- rell[[i]]
-  if (is.null(sg)) {
+  #skip single-strain groups
+  if (length(rell[[i]])<2) { #length appears to work for both graph objects and NA
     next
   }
+  
+  #temporary
+  sg <- rell[[i]]
+  
   #temporarily skip large graphs for development testing
   # if(length(V(sg))>80) {
   #   next
   # }
+  
   #plot(sg,layout=layout_with_fr,axes = T,vertex.size=2)
   sc_fg <- cluster_fast_greedy(sg)
   sc_eb <- cluster_edge_betweenness(sg,directed = F)
@@ -255,26 +274,30 @@ memberships <- ldply(cc,data.frame)
 #subset to isotypes with detected substructure using edge_betweeness and have more than 2 vertices
 subcomm <- memberships %>% 
   dplyr::filter(mems_eb > 1 & nmem> 2) %>%
-  dplyr::mutate(size=ifelse(nmem >10,"Large","Small")) #arbitrary
+  dplyr::mutate(size=ifelse(nmem >10,"Large","Small")) #arbitrary description of size
+
+simples <- memberships %>% dplyr::filter(!(ngraph %in% subcomm$ngraph))
+
+#do they add up?
+#nrow(singles) + nrow(simples) + nrow(subcomm)
+#yes, good
 
 #write info about isotypes with substructure
-readr::write_delim(subcomm,"processed_data/elegans/isotypes_wSubcomm_localnorm.tsv",delim = "\t",quote = 'none')
+#readr::write_delim(subcomm,"processed_data/elegans/isotypes_wSubcomm_localnorm.tsv",delim = "\t",quote = 'none')
 
 #generate list of plots that contain representations of graphs and subgraphs of isotypes with detected subcommunities across genetic and environmental parameters as edge weights
-graphCC <- list()
-graphDI <- list()
-graphTI <- list()
-graphLB <- list()
-subgrList2<- list()
-k=1
+graphCC <- list() #concordance graphs
+graphDI <- list() #distance graphs
+graphTI <- list() #time graphs
+graphLB <- list() #lab graphs
+subgrList2<- list() #plots
+k=1 #plot index
 for (j in subcomm$ngraph) {
-  print(k)
-  # if (j==210 | j ==234) {
-  #   next
-  # }
-  
+
+  #store concordance graph
   sg <- rell[[j]]
   
+  #temporary table to generate distance graph
   names <- vertex.attributes(sg)$name
   count <- length(names)
   tmptbl <- rels %>% 
@@ -283,47 +306,55 @@ for (j in subcomm$ngraph) {
     dplyr::mutate(weight=dist) %>%
     dplyr::mutate(weight=(abs(weight-max(weight)))+1)
   tmpverts<-unique(c(tmptbl$from,tmptbl$to)) 
+  #store distance graph
   dg <- graph_from_data_frame(tmptbl, directed=F, vertices=tmpverts)
   
+  #temporary table to generate time graph
   tmptbl <- rels %>% 
     dplyr::filter(!is.na(timedif)) %>%
     dplyr::filter((from %in% names) & (to %in% names)) %>%
     dplyr::mutate(weight=timedif) %>%
     dplyr::mutate(weight=(abs(weight-max(weight)))+1)
   tmpverts<-unique(c(tmptbl$from,tmptbl$to)) 
+  #store time graph
   tg <- graph_from_data_frame(tmptbl, directed=F, vertices=tmpverts)
   
+  #labdiff is boolean, replace weights of zero
   lg <- sg
-  E(lg)$weight <- E(lg)$labdiff + 0.00000001 #labdiff is boolean, replace weights of zero
+  E(lg)$weight <- E(lg)$labdiff + 0.00000001 
   #E(tg)$weight <- E(tg)$dist
-  #dc_eb <- cluster_edge_betweenness(dg,directed = F)
+
+  #cluster subcommunities - fg seems to polarize intermediate strains to most genetically similar group
   dc_fg <- cluster_fast_greedy(dg)
-  
-  #tc_eb <- cluster_edge_betweenness(tg,directed = F)
   tc_fg <- cluster_fast_greedy(tg)
-  
-  #sc_eb <- cluster_edge_betweenness(sg,directed = F)
   sc_fg <- cluster_fast_greedy(sg)
+  lc_eb <- cluster_edge_betweenness(lg,directed = F) #graph is probably not needed for lab, but easier comparison than a matrix
   
-  lc_eb <- cluster_edge_betweenness(lg,directed = F)
-  #lc_fg <- cluster_fast_greedy(lg)
+  #eb graphs not used
+  #dc_eb <- cluster_edge_betweenness(dg,directed = F)
+  #tc_eb <- cluster_edge_betweenness(tg,directed = F)
+  #sc_eb <- cluster_edge_betweenness(sg,directed = F)
+
   
-  
+  #store graphs for each parameter
   graphCC[[k]] <- list(sg,sc_fg)
   graphDI[[k]] <- list(dg,dc_fg)
   graphTI[[k]] <- list(tg,tc_fg)
   graphLB[[k]] <- list(lg,lc_eb)
   
-  
+  #store graph plots
   p1 <- as.grob(expression(plot(dc_fg,dg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
-  #p2 <- as.grob(expression(plot(dc_eb,dg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
   p3 <- as.grob(expression(plot(sc_fg,sg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
-  #p4 <- as.grob(expression(plot(sc_eb,sg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
   p5 <- as.grob(expression(plot(tc_fg,tg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
-  #p6 <- as.grob(expression(plot(tc_eb,tg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
   p7 <- as.grob(expression(plot(lc_eb,lg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
+  
+  #eb graphs not used
+  #p2 <- as.grob(expression(plot(dc_eb,dg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
+  #p4 <- as.grob(expression(plot(sc_eb,sg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
+  #p6 <- as.grob(expression(plot(tc_eb,tg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
   #p8 <- as.grob(expression(plot(lc_eb,lg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
   
+  #store composite plots
   subgrList2[[k]] <- 
             ggarrange(ggarrange(p3,hjust=-1,vjust=3),
             ggarrange(p1,hjust=-1,vjust=3),
@@ -336,9 +367,12 @@ for (j in subcomm$ngraph) {
 #perform all pairwise comparisons between members of subgraphs across environmental parameters
 all_comps <- list()
 for (k in 1:length(graphCC)) {
-  target <- induceNS(graphCC[[k]])
-  dist <- induceNS(graphDI[[k]])
   
+  #partition subcommunities of concordance graph
+  target <- induceNS(graphCC[[k]])
+  #partition subcommunities of distance graph
+  dist <- induceNS(graphDI[[k]])
+
   set_comp <- list()
   for (i in 1:length(target)) {
     comm_comp <- list()
@@ -376,15 +410,17 @@ comp_subgr <- ldply(all_comps,data.frame) %>%
   dplyr::mutate(outcome=ifelse(sep_iso=="CORR","SEP",ifelse(keep_iso=="UNCORR","KEEP","UNK"))) %>%
   dplyr::ungroup()
 
-#isotypes that must be separated
+#isotypes that must be separated (complete shared membership)
 matches <- comp_subgr %>%dplyr::filter(outcome=="SEP")
 
-#isotypes that must be kept together
+#isotypes that must be kept together (no shared membership)
 keeps <- comp_subgr %>% dplyr::filter(outcome== "KEEP")
 
 #unknowns
 unk <- comp_subgr %>% 
   dplyr::filter(outcome == "UNK") 
+
+#classify unknowns by abitrary likelihood of being separated
 class_unk <- unk %>%
   dplyr::mutate(maybe=ifelse(((pp_MI==0 & pp_MA >= 1/cgraph_NE & pp_MA > 0.5) | (pp_MI <= 1/pgraph_NE & pp_MA==1)),T,F)) %>%
   dplyr::group_by(cgraph) %>%
@@ -394,8 +430,10 @@ class_unk <- unk %>%
 #isotypes that COULD be separated (partial matches with high shared membership)
 maybs <- class_unk %>% dplyr::filter(maybe_sep=="MSEP")
 
-#isotypes that are unlikely to be separated (partial matches with high shared membership)
+#isotypes that are unlikely to be separated (partial matches with low shared membership)
 unk2 <- class_unk %>% dplyr::filter(maybe_sep=="UNK")
+
+
 
 
 
