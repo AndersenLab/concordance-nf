@@ -233,7 +233,8 @@ cc <- list()
 ##iterate through graphs 
 for (i in 1:length(rell)) {
   #skip single-strain groups
-  if (length(rell[[i]])<2) { #length appears to work for both graph objects and NA
+  if (any(is.na(rell[[i]]))) { 
+  #if (length(rell[[i]])<2) { #length appears to work for both graph objects and NA
     next
   }
   
@@ -269,16 +270,20 @@ for (i in 1:length(rell)) {
 }
 
 
-memberships <- ldply(cc,data.frame)
+memberships <- ldply(cc,data.frame) %>%
+  dplyr::filter(!is.na(ngraph))
 
 #subset to isotypes with detected substructure using edge_betweeness and have more than 2 vertices
 subcomm <- memberships %>% 
   dplyr::filter(mems_eb > 1 & nmem> 2) %>%
   dplyr::mutate(size=ifelse(nmem >10,"Large","Small")) #arbitrary description of size
 
-simples <- memberships %>% dplyr::filter(!(ngraph %in% subcomm$ngraph))
 
-#do they add up?
+#store isotypes with no substructure
+simples <- memberships %>% 
+  dplyr::filter(!(ngraph %in% subcomm$ngraph)) 
+
+
 #nrow(singles) + nrow(simples) + nrow(subcomm)
 #yes, good
 
@@ -335,7 +340,6 @@ for (j in subcomm$ngraph) {
   #tc_eb <- cluster_edge_betweenness(tg,directed = F)
   #sc_eb <- cluster_edge_betweenness(sg,directed = F)
 
-  
   #store graphs for each parameter
   graphCC[[k]] <- list(sg,sc_fg)
   graphDI[[k]] <- list(dg,dc_fg)
@@ -355,12 +359,14 @@ for (j in subcomm$ngraph) {
   #p8 <- as.grob(expression(plot(lc_eb,lg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
   
   #store composite plots
-  subgrList2[[k]] <- 
-            ggarrange(ggarrange(p3,hjust=-1,vjust=3),
-            ggarrange(p1,hjust=-1,vjust=3),
-            ggarrange(p5,hjust=-1,vjust=3),
-            ggarrange(p7,hjust=-1,vjust=3),
-            ncol=2,nrow=2,labels=c("By concordance:","By distance:","By time:","By lab:"),hjust=-0.2)
+  plot <- ggarrange(ggarrange(p3,hjust=-1,vjust=3),
+                    ggarrange(p1,hjust=-1,vjust=3),
+                    ggarrange(p5,hjust=-1,vjust=3),
+                    ggarrange(p7,hjust=-1,vjust=3),
+                    ncol=2,nrow=2,labels=c("By concordance:","By distance:","By time:","By lab:"),hjust=-0.2)
+   
+  
+  subgrList2[[k]] <-annotate_figure(plot, top = text_grob(paste0("Group ID:",j), color = "red", face = "bold", size = 14))
   k=k+1
 }
 
@@ -392,6 +398,10 @@ for (k in 1:length(graphCC)) {
 }
 
 #estimate shared membership between subgraphs across environmental parameters and classify as SEP, KEEP, or UNK
+#NE = number of elements
+#MA = matches
+#MI = missing
+#pp = proportion
 comp_subgr <- ldply(all_comps,data.frame) %>%
   dplyr::group_by(cgraph) %>%
   dplyr::mutate(max_subC=max(cgraph_subID)) %>%
@@ -408,32 +418,73 @@ comp_subgr <- ldply(all_comps,data.frame) %>%
   dplyr::mutate(partial=ifelse(pp_MA < 1 & pp_MI >0,F,T)) %>%
   dplyr::mutate(keep_iso=ifelse(any(partial)==T,"MAYBE","UNCORR")) %>%
   dplyr::mutate(outcome=ifelse(sep_iso=="CORR","SEP",ifelse(keep_iso=="UNCORR","KEEP","UNK"))) %>%
-  dplyr::ungroup()
+  dplyr::ungroup() %>%
+  dplyr::mutate(targetUID=paste0(cgraph,"_",cgraph_subID),queryUID=paste0(cgraph,"_",pgraph_subID))
 
 #isotypes that must be separated (complete shared membership)
 matches <- comp_subgr %>%dplyr::filter(outcome=="SEP")
-
 #isotypes that must be kept together (no shared membership)
 keeps <- comp_subgr %>% dplyr::filter(outcome== "KEEP")
-
 #unknowns
-unk <- comp_subgr %>% 
-  dplyr::filter(outcome == "UNK") 
-
+unk <- comp_subgr %>% dplyr::filter(outcome == "UNK") 
 #classify unknowns by abitrary likelihood of being separated
 class_unk <- unk %>%
   dplyr::mutate(maybe=ifelse(((pp_MI==0 & pp_MA >= 1/cgraph_NE & pp_MA > 0.5) | (pp_MI <= 1/pgraph_NE & pp_MA==1)),T,F)) %>%
   dplyr::group_by(cgraph) %>%
   dplyr::mutate(maybe_sep=ifelse(any(maybe)==T,"MSEP","UNK")) %>%
   dplyr::ungroup()
-
 #isotypes that COULD be separated (partial matches with high shared membership)
 maybs <- class_unk %>% dplyr::filter(maybe_sep=="MSEP")
-
 #isotypes that are unlikely to be separated (partial matches with low shared membership)
 unk2 <- class_unk %>% dplyr::filter(maybe_sep=="UNK")
 
+#split `matches` into individual isotypes
+splitList <- list()
+for (i in unique(matches$cgraph)) {
+  split <- induceNS(graphCC[[i]])
+  
+  subgList <- list()
+  for (j in 1:length(graphCC[[i]])) {
+    mem <- paste0(V(split[[j]])$name,collapse = ",")
+    subgList[[j]] <- data.frame(members=mem,
+                                nmem=length(V(split[[j]])$name),
+                                gnum=paste0(subcomm$ngraph[i],"_",letters[j]))
+  }
+  splitList[[i]] <- ldply(subgList,data.frame)
+}
+split_df <- ldply(splitList,data.frame)
+
+#get isotypes to keep
+keep_subcomm <- subcomm[keeps$cgraph,] %>% dplyr::select(-size)
+#merge simples and keepers
+simp_keep <- rbind(simples,keep_subcomm)
+
+#make df of simple+keep cases
+simpleList<-list()
+for (i in 1:length(simp_keep$ngraph)) {
+  simpleList[[i]] <- data.frame(members=paste(V(rell[[simp_keep$ngraph[i]]])$name,collapse=","),
+                                nmem=simp_keep$nmem[i],
+                                gnum=simp_keep$ngraph[i])
+}
+simple_df <- ldply(simpleList,data.frame)
 
 
 
+#make final isotype assignment (excluding unresolved graphs for manual curation)
+resolved_groups <- rbind(singles,simple_df,split_df) %>%
+  tidyr::separate(gnum,into = c("og_group","partition"),sep="_",remove = F) %>%
+  dplyr::mutate(og_group=as.numeric(og_group)) %>%
+  dplyr::rename(ID=gnum) %>%
+  dplyr::arrange(og_group) %>%
+  dplyr::select(-partition,-nmem) %>%
+  dplyr::mutate(members = strsplit(as.character(members), ",")) %>% 
+  tidyr::unnest(members)
 
+#original CE isotype count 604
+#594 are singles, simples, or keeps
+#7 are split into 14
+#17 are unknown and require manual curation 
+
+#get unknowns
+unk_subcomm <- subcomm[unique(unk$cgraph),] %>% dplyr::select(-size)
+unk_graphs <- subgrList2[unique(unk$cgraph)]
