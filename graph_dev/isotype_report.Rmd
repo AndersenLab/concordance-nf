@@ -1,0 +1,73 @@
+---
+title: "Graph-based isotype report"
+author: "Nicolas Moya"
+date: "`r Sys.Date()`"
+output: html_document
+
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r inputs, echo=FALSE,comment=NA,message=FALSE}
+library(readr)
+library(dplyr)
+summary_iso <- readr::read_tsv("processed_data/elegans/summary_isotype_classification.tsv")
+unk_subcomm_table <- readRDS(file = "processed_data/elegans/unk_subcomm_table.Rda") %>% dplyr::select(-drange)
+maybes_plots<- readRDS(file = "processed_data/elegans/maybes_plots.Rda")
+unk_plots<- readRDS(file = "processed_data/elegans/unk_plots.Rda")
+split_plots<- readRDS(file = "processed_data/elegans/split_plots.Rda")
+```
+
+### Isotype classification summary
+```{r plots,echo=FALSE,comment=NA}
+knitr::kable(summary_iso)
+```
+Singles (single strain isotypes), simples (isotypes with no substructure), and complex_uncorr (isotypes with substructure, but no correlation to environmental params) were kept unchanged.  
+complex_corr (isotypes with substructure that had perfect correlation with substructure from at least one environmental parameter) were automatically split.  
+complex_partial_hi and complex_partial_low need to be manually curated.  
+
+### Isotypes that were automatically split because of complete member sharing between concordance subgraphs and environmental parameter subgraph(s)
+```{r plotss,echo=FALSE,comment=NA}
+for (i in 1:length(split_plots)) {
+  print(split_plots[[i]])
+  cat(" \n") 
+  cat(" \n") 
+  cat(" \n") 
+  cat(" \n") 
+  cat(" \n") 
+}
+```
+
+### Isotypes that have partial member sharing between concordance subgraphs and environmental parameter subgraph(s) - require manual curation
+```{r tableu,echo=FALSE,comment=NA}
+knitr::kable(unk_subcomm_table)
+```
+
+### Isotypes with high-partial member sharing between concordance subgraphs and environmental parameter subgraph(s) (could be separated)
+```{r plotsm,echo=FALSE,comment=NA}
+for (i in 1:length(maybes_plots)) {
+  print(maybes_plots[[i]])
+  cat(" \n") 
+  cat(" \n") 
+  cat(" \n") 
+  cat(" \n") 
+  cat(" \n") 
+}
+```
+
+### Isotypes with low-partial member sharing between concordance subgraphs and environmental parameter subgraph(s) (unlikely to be separated)
+```{r plotsu,echo=FALSE,comment=NA}
+for (i in 1:length(unk_plots)) {
+  print(unk_plots[[i]])
+  cat(" \n") 
+  cat(" \n") 
+  cat(" \n") 
+  cat(" \n") 
+  cat(" \n") 
+}
+```
+
+
