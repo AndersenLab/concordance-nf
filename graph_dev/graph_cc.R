@@ -9,107 +9,6 @@ library(grid)
 library(ggpubr)
 library(geosphere)
 library(lubridate)
-#library(circlize)
-
-## concordance heatmap function from Katie Evans
-concordance_heatmap <- function(strains, version) {
-  
-  if (length(strains) > 2) {
-    
-    if (version == "new") {
-      gtcheck_table <- pwcc
-      color_discordance = "royalblue1"
-    }
-    
-    if (version == "old") {
-      gtcheck_table <- gtcheck_old
-      color_discordance = "yellow"
-    }
-    
-    df1 <- gtcheck_table %>%
-      dplyr::select(i, j, concordance) %>% 
-      dplyr::filter(i %in% strains & j %in% strains) %>% 
-      unique()
-    
-    df2 <- df1 %>% 
-      dplyr::rename(i=j, j=i)
-    
-    df <- dplyr::bind_rows(df1, df2) %>% 
-      unique() %>% 
-      tidyr::spread(j, concordance) 
-    
-    if (nrow(df) > 2) {   
-      
-      if (nrow(df) <= 10) { font_size = 12}
-      if (nrow(df) > 10 & nrow(df) < 15) { font_size = 10}
-      if (nrow(df) >= 15 & nrow(df) < 30) { font_size = 8}
-      if (nrow(df) >= 30 ) { font_size = 6}
-      
-      # make heatmap of concordance
-      m = select(df, -i) %>% as.matrix()
-      rownames(m) = df$i
-      
-      col_fun = circlize::colorRamp2(c(min(m, na.rm=T), max(m, na.rm=T)), c(color_discordance, "indianred1"))
-      
-      p  = ComplexHeatmap::Heatmap(m, col=col_fun, rect_gp = gpar(col = "white", lwd = 2), cell_fun = function(j, i, x, y, width, height, fill) {
-        grid.text(sprintf("%.5f", m[i, j]), x, y, gp = gpar(fontsize = font_size)) 
-      })
-      
-      print(p)
-    } else { print("Not more than 2 strains in group in this dataset")}
-    
-  } else { print("Not more than 2 strains in group in this dataset")}
-}
-
-## adaptation of Katie's function to plot discordant sites
-discordance_heatmap <- function(strains, version) {
-  
-  if (length(strains) > 2) {
-    
-    if (version == "new") {
-      gtcheck_table <- pwcc
-      color_discordance = "royalblue1"
-    }
-    
-    if (version == "old") {
-      gtcheck_table <- gtcheck_old
-      color_discordance = "yellow"
-    }
-    
-    df1 <- gtcheck_table %>%
-      dplyr::select(i, j, discordance) %>% 
-      dplyr::filter(i %in% strains & j %in% strains) %>% 
-      unique()
-    
-    df2 <- df1 %>% 
-      dplyr::rename(i=j, j=i)
-    
-    df <- dplyr::bind_rows(df1, df2) %>% 
-      unique() %>% 
-      tidyr::spread(j, discordance) 
-    
-    if (nrow(df) > 2) {   
-      
-      if (nrow(df) <= 10) { font_size = 12}
-      if (nrow(df) > 10 & nrow(df) < 15) { font_size = 10}
-      if (nrow(df) >= 15 & nrow(df) < 30) { font_size = 8}
-      if (nrow(df) >= 30 ) { font_size = 6}
-      
-      # make heatmap of concordance
-      m = select(df, -i) %>% as.matrix()
-      rownames(m) = df$i
-      
-      col_fun = circlize::colorRamp2(c(min(m, na.rm=T), max(m, na.rm=T)), c(color_discordance, "indianred1"))
-      
-      p  = ComplexHeatmap::Heatmap(m, col=col_fun, rect_gp = gpar(col = "white", lwd = 2), cell_fun = function(j, i, x, y, width, height, fill) {
-        grid.text(sprintf("%.5f", m[i, j]), x, y, gp = gpar(fontsize = font_size)) 
-      })
-      
-      print(p)
-    } else { print("Not more than 2 strains in group in this dataset")}
-    
-  } else { print("Not more than 2 strains in group in this dataset")}
-}
 
 #this function takes a graph with detected subcommunities and splits them into individual graphs
 induceNS <- function(graphL) {
@@ -122,9 +21,66 @@ induceNS <- function(graphL) {
   return(subgraphs)
 }
 
-setwd("/vast/eande106/projects/Nicolas/github/concordance-nf/graph_dev/")
-#read gtcheck (pairwise concordance) file
+#this fucntion performs all pairwise comparisons between members of subgraphs across environmental parameters, and classifies based on shared membership between subgraphs
+compSubgr <- function (cgraphs,pgraphs,param) {
+  all_comps <- list()
+  for (k in 1:length(cgraphs)) {
+    #partition subcommunities of concordance graph
+    target <- induceNS(cgraphs[[k]])
+    #partition subcommunities of distance graph
+    dist <- induceNS(pgraphs[[k]])
+    
+    set_comp <- list()
+    for (i in 1:length(target)) {
+      comm_comp <- list()
+      for (j in 1:length(dist)) {
+        ntar <- V(target[[i]])$name
+        nparam <- V(dist[[j]])$name
+        comp<- as.data.frame.list(c(k,i,j,length(ntar),length(nparam),length(ntar[(ntar %in% nparam)]),length(nparam[!(nparam %in% ntar)])))
+        colnames(comp) <- c("cgraph","cgraph_subID","pgraph_subID","cgraph_NE","pgraph_NE","cgraph_MA","pgraph_MI")
+        comm_comp[[j]] <- comp
+        #print(comps[[k]])
+      }
+      set_comp[[i]] <- ldply(comm_comp,data.frame)
+    }
+    all_comps[[k]] <- ldply(set_comp,data.frame) 
+  }
+  
+  #estimate shared membership between subgraphs across environmental parameters and classify as SEP, KEEP, or UNK
+  #NE = number of elements
+  #MA = matches
+  #MI = missing
+  #pp = proportion
+  comp_subgr <- ldply(all_comps,data.frame) %>%
+    dplyr::group_by(cgraph) %>%
+    dplyr::mutate(max_subC=max(cgraph_subID)) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(!(cgraph_MA==0)) %>%
+    dplyr::mutate(pp_MA=cgraph_MA/cgraph_NE,pp_MI=pgraph_MI/pgraph_NE) %>%
+    dplyr::group_by(cgraph,cgraph_subID) %>%
+    dplyr::mutate(groupID=cur_group_id()) %>%
+    dplyr::filter(pp_MA==max(pp_MA) & pp_MI==(min(pp_MI))) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(perf_MA=ifelse(pp_MA == 1 & pp_MI ==0,T,F)) %>%
+    dplyr::group_by(cgraph) %>%
+    dplyr::mutate(sep_iso=ifelse(any(perf_MA==T),"CORR","MAYBE")) %>%
+    dplyr::mutate(partial=ifelse(pp_MA < 1 & pp_MI >0,F,T)) %>%
+    dplyr::mutate(keep_iso=ifelse(any(partial)==T,"MAYBE","UNCORR")) %>%
+    dplyr::mutate(outcome=ifelse(sep_iso=="CORR","SEP",ifelse(keep_iso=="UNCORR","KEEP","UNK"))) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(targetUID=paste0(cgraph,"_",cgraph_subID),queryUID=paste0(cgraph,"_",pgraph_subID)) %>%
+    dplyr::mutate(maybe=ifelse(((pp_MI==0 & pp_MA >= 1/cgraph_NE & pp_MA > 0.5) | (pp_MI <= 1/pgraph_NE & pp_MA==1)),T,F)) %>%
+    dplyr::group_by(cgraph) %>%
+    dplyr::mutate(maybe_sep=ifelse(any(maybe)==T,"MSEP","UNK")) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(param=param)
+  
+  return(comp_subgr)
+}
 
+setwd("/vast/eande106/projects/Nicolas/github/concordance-nf/graph_dev/")
+
+#read gtcheck (pairwise concordance) file
 #briggsae
 #pwcc <- readr::read_tsv("/vast/eande106/projects/Nicolas/collabs/forNikita/graph_analysis/gtcheck.tsv") %>%
 #elegans
@@ -216,15 +172,6 @@ for (i in 1:length(gd)) {
 
 dfl_all <- ldply(dfl,data.frame)
 singles <- dfl_all %>% dplyr::filter(nmem==1)
-# groups <- list()
-# for (i in 1:length(gd)) {
-#   groups[[i]] <-data.frame(group=i,members= V(gd[[i]])$name)
-# }
-# groups_tbl <- ldply(groups,data.frame)
-# 
-# write.table(groups_tbl,'/vast/eande106/projects/Nicolas/github/concordance-nf/graph_dev/processed_data/c_briggsae_groups_pass1.tsv', quote = FALSE)
-#save.image("/vast/eande106/projects/Nicolas/github/concordance-nf/graph_dev/processed_data/c_briggsae_env.Rda")
-
 
 #search for substructure across isotypes using cluster_edge_betweeness()
 glist_fg<- list()
@@ -246,8 +193,9 @@ for (i in 1:length(rell)) {
   #   next
   # }
   
-  #plot(sg,layout=layout_with_fr,axes = T,vertex.size=2)
+  #cluster fast greedy (fg)
   sc_fg <- cluster_fast_greedy(sg)
+  #cluster edge betweeness (eb)
   sc_eb <- cluster_edge_betweenness(sg,directed = F)
   V(sg)$label.cex=1.5
   #cc stores information about graphs that I thought could be useful
@@ -283,12 +231,9 @@ subcomm <- memberships %>%
 simples <- memberships %>% 
   dplyr::filter(!(ngraph %in% subcomm$ngraph)) 
 
-
+#do they add up?
 #nrow(singles) + nrow(simples) + nrow(subcomm)
 #yes, good
-
-#write info about isotypes with substructure
-#readr::write_delim(subcomm,"processed_data/elegans/isotypes_wSubcomm_localnorm.tsv",delim = "\t",quote = 'none')
 
 #generate list of plots that contain representations of graphs and subgraphs of isotypes with detected subcommunities across genetic and environmental parameters as edge weights
 graphCC <- list() #concordance graphs
@@ -324,10 +269,10 @@ for (j in subcomm$ngraph) {
   #store time graph
   tg <- graph_from_data_frame(tmptbl, directed=F, vertices=tmpverts)
   
-  #labdiff is boolean, replace weights of zero
+  #labdiff is boolean, replace weights of zero with small num
   lg <- sg
   E(lg)$weight <- E(lg)$labdiff + 0.00000001 
-  #E(tg)$weight <- E(tg)$dist
+
 
   #cluster subcommunities - fg seems to polarize intermediate strains to most genetically similar group
   dc_fg <- cluster_fast_greedy(dg)
@@ -347,10 +292,10 @@ for (j in subcomm$ngraph) {
   graphLB[[k]] <- list(lg,lc_eb)
   
   #store graph plots
-  p1 <- as.grob(expression(plot(dc_fg,dg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
-  p3 <- as.grob(expression(plot(sc_fg,sg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
-  p5 <- as.grob(expression(plot(tc_fg,tg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
-  p7 <- as.grob(expression(plot(lc_eb,lg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
+  p1 <- as.grob(expression(plot(dc_fg,dg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=2.5,edge.width=0.2)))
+  p3 <- as.grob(expression(plot(sc_fg,sg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=2.5,edge.width=0.2)))
+  p5 <- as.grob(expression(plot(tc_fg,tg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=2.5,edge.width=0.2)))
+  p7 <- as.grob(expression(plot(lc_eb,lg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=2.5,edge.width=0.2)))
   
   #eb graphs not used
   #p2 <- as.grob(expression(plot(dc_eb,dg,layout=layout_with_fr,mark.border="black",mark.col="lightpink",vertex.size=3.5,edge.width=0.2)))
@@ -370,79 +315,39 @@ for (j in subcomm$ngraph) {
   k=k+1
 }
 
-#perform all pairwise comparisons between members of subgraphs across environmental parameters
-all_comps <- list()
-for (k in 1:length(graphCC)) {
-  
-  #partition subcommunities of concordance graph
-  target <- induceNS(graphCC[[k]])
-  #partition subcommunities of distance graph
-  dist <- induceNS(graphDI[[k]])
 
-  set_comp <- list()
-  for (i in 1:length(target)) {
-    comm_comp <- list()
-    for (j in 1:length(dist)) {
-      ntar <- V(target[[i]])$name
-      nparam <- V(dist[[j]])$name
-      comp<- as.data.frame.list(c(k,i,j,length(ntar),length(nparam),length(ntar[(ntar %in% nparam)]),length(nparam[!(nparam %in% ntar)])))
-      colnames(comp) <- c("cgraph","cgraph_subID","pgraph_subID","cgraph_NE","pgraph_NE","cgraph_MA","pgraph_MI")
-      comm_comp[[j]] <- comp
-      #print(comps[[k]])
-    }
-    set_comp[[i]] <- ldply(comm_comp,data.frame)
-  }
-  all_comps[[k]] <- ldply(set_comp,data.frame) 
-  time <- induceNS(graphTI[[k]])
-  lab <- induceNS(graphLB[[k]])
-}
-
-#estimate shared membership between subgraphs across environmental parameters and classify as SEP, KEEP, or UNK
-#NE = number of elements
-#MA = matches
-#MI = missing
-#pp = proportion
-comp_subgr <- ldply(all_comps,data.frame) %>%
-  dplyr::group_by(cgraph) %>%
-  dplyr::mutate(max_subC=max(cgraph_subID)) %>%
-  dplyr::ungroup() %>%
-  dplyr::filter(!(cgraph_MA==0)) %>%
-  dplyr::mutate(pp_MA=cgraph_MA/cgraph_NE,pp_MI=pgraph_MI/pgraph_NE) %>%
-  dplyr::group_by(cgraph,cgraph_subID) %>%
-  dplyr::mutate(groupID=cur_group_id()) %>%
-  dplyr::filter(pp_MA==max(pp_MA) & pp_MI==(min(pp_MI))) %>%
-  dplyr::ungroup() %>%
-  dplyr::mutate(perf_MA=ifelse(pp_MA == 1 & pp_MI ==0,T,F)) %>%
-  dplyr::group_by(cgraph) %>%
-  dplyr::mutate(sep_iso=ifelse(any(perf_MA==T),"CORR","MAYBE")) %>%
-  dplyr::mutate(partial=ifelse(pp_MA < 1 & pp_MI >0,F,T)) %>%
-  dplyr::mutate(keep_iso=ifelse(any(partial)==T,"MAYBE","UNCORR")) %>%
-  dplyr::mutate(outcome=ifelse(sep_iso=="CORR","SEP",ifelse(keep_iso=="UNCORR","KEEP","UNK"))) %>%
-  dplyr::ungroup() %>%
-  dplyr::mutate(targetUID=paste0(cgraph,"_",cgraph_subID),queryUID=paste0(cgraph,"_",pgraph_subID))
+#bind distance/time vs concordance comparisons
+comp_subgr <- rbind(compSubgr(graphCC,graphDI,"DIST"),compSubgr(graphCC,graphTI,"TIME"))
 
 #isotypes that must be separated (complete shared membership)
 matches <- comp_subgr %>%dplyr::filter(outcome=="SEP")
+matches_summ <- matches %>% 
+  dplyr::select(cgraph,param) %>%
+  dplyr::group_by(cgraph) %>%
+  dplyr::distinct(param,.keep_all = T) %>%
+  dplyr::summarise(params=toString(param)) %>%
+  dplyr::ungroup() %>%
+  dplyr::rename(ID=cgraph)
+
+#filter out matches from different env params in the unknown list
+unks <- comp_subgr %>% dplyr::filter(outcome == "UNK" & !(cgraph %in% matches_summ$ID)) 
+
+#isotypes that COULD be separated (partial matches with high shared membership)
+maybs <- unks %>% dplyr::filter(maybe_sep=="MSEP")
+maybs_ID <- unique(maybs$cgraph)
+#isotypes that are unlikely to be separated (partial matches with low shared membership)
+unk2 <- unks %>% dplyr::filter(maybe_sep=="UNK")
+unk2_ID <- setdiff(unique(unk2$cgraph),maybs_ID)
+#all unknowns
+unk_ID <- rbind(data.frame(ID=maybs_ID,class="MSEP"),data.frame(ID=unk2_ID,class="UNK"))
 #isotypes that must be kept together (no shared membership)
 keeps <- comp_subgr %>% dplyr::filter(outcome== "KEEP")
-#unknowns
-unk <- comp_subgr %>% dplyr::filter(outcome == "UNK") 
-#classify unknowns by abitrary likelihood of being separated
-class_unk <- unk %>%
-  dplyr::mutate(maybe=ifelse(((pp_MI==0 & pp_MA >= 1/cgraph_NE & pp_MA > 0.5) | (pp_MI <= 1/pgraph_NE & pp_MA==1)),T,F)) %>%
-  dplyr::group_by(cgraph) %>%
-  dplyr::mutate(maybe_sep=ifelse(any(maybe)==T,"MSEP","UNK")) %>%
-  dplyr::ungroup()
-#isotypes that COULD be separated (partial matches with high shared membership)
-maybs <- class_unk %>% dplyr::filter(maybe_sep=="MSEP")
-#isotypes that are unlikely to be separated (partial matches with low shared membership)
-unk2 <- class_unk %>% dplyr::filter(maybe_sep=="UNK")
+keeps_ID <-  setdiff(unique(keeps$cgraph),unique(c(matches_summ$ID,maybs_ID,unk2_ID)))
 
 #split `matches` into individual isotypes
 splitList <- list()
-for (i in unique(matches$cgraph)) {
+for (i in matches_summ$ID) {
   split <- induceNS(graphCC[[i]])
-  
   subgList <- list()
   for (j in 1:length(graphCC[[i]])) {
     mem <- paste0(V(split[[j]])$name,collapse = ",")
@@ -455,7 +360,7 @@ for (i in unique(matches$cgraph)) {
 split_df <- ldply(splitList,data.frame)
 
 #get isotypes to keep
-keep_subcomm <- subcomm[keeps$cgraph,] %>% dplyr::select(-size)
+keep_subcomm <- subcomm[keeps_ID,] %>% dplyr::select(-size)
 #merge simples and keepers
 simp_keep <- rbind(simples,keep_subcomm)
 
@@ -468,8 +373,6 @@ for (i in 1:length(simp_keep$ngraph)) {
 }
 simple_df <- ldply(simpleList,data.frame)
 
-
-
 #make final isotype assignment (excluding unresolved graphs for manual curation)
 resolved_groups <- rbind(singles,simple_df,split_df) %>%
   tidyr::separate(gnum,into = c("og_group","partition"),sep="_",remove = F) %>%
@@ -478,13 +381,32 @@ resolved_groups <- rbind(singles,simple_df,split_df) %>%
   dplyr::arrange(og_group) %>%
   dplyr::select(-partition,-nmem) %>%
   dplyr::mutate(members = strsplit(as.character(members), ",")) %>% 
-  tidyr::unnest(members)
+  tidyr::unnest(members) %>%
+  dplyr::mutate(ID=gsub("_","",ID))
 
-#original CE isotype count 604
-#594 are singles, simples, or keeps
-#7 are split into 14
-#17 are unknown and require manual curation 
+#write resolved isotypes
+readr::write_tsv(resolved_groups,"processed_data/elegans/resolved_isotypes.tsv")
 
-#get unknowns
-unk_subcomm <- subcomm[unique(unk$cgraph),] %>% dplyr::select(-size)
-unk_graphs <- subgrList2[unique(unk$cgraph)]
+#get unknowns for report
+unk_subcomm <- subcomm[unk_ID$ID,] %>% dplyr::select(-size) %>%
+  dplyr::select(-mems_eb) %>%
+  dplyr::rename(graph_ID=ngraph,nof_subcomm=mems_fg,nof_strains=nmem,concordance_range=ccrange,min_discordance=minddiff,max_discordance=maxddiff)
+unk_graphs_cc <- graphCC[unk_ID$ID]
+unk_graphs_di <- graphDI[unk_ID$ID]
+unk_graphs_ti <- graphTI[unk_ID$ID]
+maybs_plots <- subgrList2[maybs_ID]
+unk_plots <- subgrList2[unk2_ID]
+split_plots <- subgrList2[matches_summ$ID]
+
+#get and write summary of classifications
+summary_iso <- data_frame(isotype_class=c("single","simple","complex_uncorr","complex_corr","complex_pcorr_hi","complex_pcorr_low"),count=c(nrow(singles),nrow(simples),length(keeps_ID),length(matches_summ$ID),length(maybs_ID),length(unk2_ID)))
+readr::write_tsv(summary_iso,"processed_data/elegans/summary_isotype_classification.tsv")
+
+#write objects for markdown
+saveRDS(object = unk_subcomm,file = "processed_data/elegans/unk_subcomm_table.Rda")
+saveRDS(object = unk_graphs_cc,file = "processed_data/elegans/unk_cc_graphs.Rda")
+saveRDS(object = unk_graphs_di,file = "processed_data/elegans/unk_di_graphs.Rda")
+saveRDS(object = unk_graphs_ti,file = "processed_data/elegans/unk_ti_graphs.Rda")
+saveRDS(object = maybs_plots,file = "processed_data/elegans/maybes_plots.Rda")
+saveRDS(object = unk_plots,file = "processed_data/elegans/unk_plots.Rda")
+saveRDS(object = split_plots,file = "processed_data/elegans/split_plots.Rda")
